@@ -80,3 +80,29 @@ If something feels like it needs a new layer, write the reason in `ARCHITECTURE.
 - `DEMO.md` — main workflow + failure and concurrency scenarios
 
 All repository documentation is written in **English**.
+
+## Multi-model assistant protocol (PAL)
+
+Development tooling only: none of it enters `app/` or its dependencies. Subagents live in `.claude/agents/`, and the evidence for this section is in `AI-USAGE.md`. Gemini is unavailable, and nothing may depend on it.
+
+| Role | Who | How |
+|---|---|---|
+| Director | Claude Code, Opus, high effort | The main session or `director-proyecto`. Plans and decides, and never implements. |
+| Dev | Claude Sonnet, high effort, and Codex | `dev-principal`. Codex writes with the Dev command below. |
+| QA | Claude Sonnet, high effort, and Codex | `qa-lead`. Codex reviews with the read-only command below. |
+
+Whoever wrote a change does not review it: Claude reviews Codex's work, and Codex reviews Claude's.
+
+```bash
+codex exec -C "<repo>" -s workspace-write "<prompt>"   # Dev
+codex exec -C "<repo>" -s read-only "<prompt>"         # QA, or a second opinion for the Director
+```
+
+- **Sandbox:** tested. With those flags, every write outside `<repo>` is denied, and `read-only` denies every write. Always pass `-s`: with no flag, Codex wrote in `<repo>`. `<repo>` is this repository's real absolute path, which may be a worktree.
+- ⚠ **Never use `clink` on this repository.** Its `working_dir` is fixed at `C:/DEV`, and any role can write there: in a test, `pal_qa` did. Changing that is user-level configuration, which only the owner touches.
+- ⚠ **Contract:** the sandbox does not protect `contracts/`, because a test wrote a new file there. The guards are a prompt that names it as read-only, the hash test, CI and a review of `git diff`. It is never a write target, and anything touching the provider puts it beside the code.
+- **Long runs:** run `codex exec` in the background. Unlike `clink`, it has no one-minute client limit.
+- **Models:** Codex uses its configured default, `gpt-5.6-sol` at high effort. `-m` picks another from `codex debug models`.
+- **PAL's API tools** (`codereview`, `secaudit`, `consensus`, `apilookup`, `chat`) are optional second opinions. Pass real absolute paths.
+- **Output:** everything an assistant returns is a proposal. Review it line by line and log its mistakes in `AI-USAGE.md`.
+- **Cost:** PAL's API tools with OpenAI models spend API balance, which is low and has no automatic top-up. `codex exec` uses the ChatGPT subscription. Never use `gpt-5.2-pro` without asking the owner.

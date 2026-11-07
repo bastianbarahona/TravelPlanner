@@ -73,6 +73,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 ### 1.5 Housekeeping
 
 - **This file is versioned since Iteration 1,** so worktrees can read it. It used to be untracked in the main checkout.
+- **Auto-fix has no app-wide default,** so the rule in `CLAUDE.md` is what turns it on. It covers pull requests opened from a Claude Code session, not ones opened by hand.
 - **`docs/observaciones.md` is local only.** It is excluded through `.git/info/exclude`, so it has no backup and does not exist on other clones or in worktrees.
 - **Material for `AI-USAGE.md`,** all detected by testing or by reading the contract:
   - `Path(max_length=128)` answers 422, not 404.
@@ -101,6 +102,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 3. Resolve the iteration's open design decisions first, in small batches, each with a recommendation.
 4. Test a recommendation before accepting it, whether it comes from a person or from an AI.
 5. Close by updating this file, then commit only when the owner asks.
+6. Follow "CI and pull requests" in `CLAUDE.md`: every pull request is born with Auto-fix on, every CI failure is alerted and logged in 2.7, and every fix needs the owner's review and validation.
 
 ### 2.2 Iterations
 
@@ -206,7 +208,7 @@ Every response, in every test, goes through `tests/contract.py`, using the clien
 | `python tests/mutation_check.py` | 72 of 72 mutations killed, in 32 minutes. The first run killed 70, and its two survivors produced two new tests (1.5). |
 | `docker compose up` from clean, image built without cache | Healthy, running as a non-root user, with the control interface answering 404 |
 | `python tests/compose_smoke.py` | Passes: a replay after a kill and in a new container is byte-identical to the first response. Without the volume mount it fails. |
-| GitHub Actions, `.github/workflows/ci.yml` | Runs the contract tests and the compose smoke on every push. The mutation check stays manual, because it takes 30 minutes. |
+| GitHub Actions, `.github/workflows/ci.yml` | Runs the contract tests and the compose smoke on every push. Both passed on Linux from a fresh checkout, at `d20a00c`. The mutation check stays manual, because it takes 30 minutes. |
 | `docker compose stop` | Clean, in under 2 seconds |
 | Image built from files with CRLF line endings | Builds and serves. This stands in for a clean Windows clone, which needs a commit first. |
 | `contracts/openAPI.json` | SHA-256 equal to the committed blob: `9bf9b93e…` |
@@ -217,3 +219,11 @@ Every response, in every test, goes through `tests/contract.py`, using the clien
 - Every read takes the SQLite write lock, because a read may settle a booking or refresh a quote. One writer at a time is enough for a mock.
 - `Retry-After` is a fixed 2 seconds, and rate limiting exists only as a fixture or a control fault. The mock has no real limiter.
 - `test_suppliers_are_queried_concurrently_within_one_deadline` measures wall time, so a heavily loaded machine could fail it.
+
+### 2.7 CI failure log
+
+Rule 6 of 2.1 applies. Newest first. A fix stays a proposal until the last column names the owner's validation.
+
+| Date | Commit | Job | Cause | Fix | Validated by owner |
+|---|---|---|---|---|---|
+| | | | No failures so far | | |

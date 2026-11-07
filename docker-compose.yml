@@ -1,0 +1,25 @@
+services:
+  provider-mock:
+    build:
+      context: .
+      dockerfile: provider-mock/Dockerfile
+    ports:
+      - "${MOCK_PORT:-4010}:4010"
+    environment:
+      MOCK_DB_PATH: /data/provider-mock.db
+      MOCK_TOKENS: ${MOCK_TOKENS:-travel-demo-token:travel-app}
+      MOCK_QUOTE_TTL_SECONDS: ${MOCK_QUOTE_TTL_SECONDS:-900}
+      MOCK_SUPPLIER_DEADLINE_SECONDS: ${MOCK_SUPPLIER_DEADLINE_SECONDS:-5}
+      MOCK_PENDING_DELAY_SECONDS: ${MOCK_PENDING_DELAY_SECONDS:-5}
+      MOCK_CONTROL_ENABLED: ${MOCK_CONTROL_ENABLED:-0}
+    volumes:
+      - provider-mock-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4010/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  provider-mock-data:

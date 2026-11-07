@@ -1,0 +1,4 @@
+-r ../provider-mock/requirements.txt
+httpx==0.28.1
+pytest==9.2.0
+rfc3339-validator==0.1.4

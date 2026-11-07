@@ -48,6 +48,12 @@ contracts/openAPI.json   ← never modified
 4. If it changes a guarantee, `ARCHITECTURE.md` is updated in the same commit.
 5. Commit message states what changed and why in one line.
 
+## CI and pull requests
+
+1. **Every pull request is born with Auto-fix on.** The session that opens it turns it on right away, as part of opening it.
+2. **Every CI failure is alerted to the owner and logged** in `docs/STATUS.md`, Section 2.7, with no exceptions.
+3. **Every fix to a CI failure needs the owner's review and validation,** even when it is automatic, trivial or for a flaky failure. A fix may be pushed to the pull request so CI can check it, but it stays a proposal until the owner validates it. Auto-merge stays off.
+
 ## Scope guardrails — do NOT build
 
 - Currency conversion, payments, cancellations, refunds

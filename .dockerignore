@@ -1,3 +1,5 @@
 *
 !contracts/openAPI.json
 !provider-mock/
+!app/
+**/__pycache__

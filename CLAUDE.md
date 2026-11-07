@@ -103,14 +103,14 @@ Development tooling only: none of it enters `app/` or its dependencies. Subagent
 Whoever wrote a change does not review it: Claude reviews Codex's work, and Codex reviews Claude's.
 
 ```bash
-codex exec -C "<repo>/<dir>" --add-dir "<repo>/<dir2>" -s workspace-write "<prompt>"   # Dev
-codex exec -C "<repo>" -s read-only "<prompt>"         # QA, or a second opinion for the Director
+codex exec -C "<repo>/<dir>" --add-dir "<repo>/<dir2>" -s workspace-write "<prompt>" < /dev/null   # Dev
+codex exec -C "<repo>" -s read-only "<prompt>" < /dev/null         # QA, or a second opinion for the Director
 ```
 
 - **Sandbox:** tested. `workspace-write` reaches only `-C` and each `--add-dir`, and `read-only` denies every write. Always pass `-s`: with no flag, Codex wrote. `<repo>` is this repository's real absolute path, which may be a worktree.
 - ⚠ **Never use `clink` on this repository.** Every role, `pal_qa` included, can write across `C:/DEV/TravelPlanner`, `contracts/` too, and it starts in the main checkout, not in a worktree. Its configuration is the owner's.
 - ⚠ **Contract:** never pass `<repo>` or `contracts/` as a writable directory. Left outside, Codex can read it, and writing, deleting and renaming there are denied. Second line: the hash test, CI and `git diff -- contracts/`. Anything touching the provider keeps it beside the code. `attrib +R` is not a barrier (`AI-USAGE.md`).
-- **Long runs:** run `codex exec` in the background. Unlike `clink`, it has no one-minute client limit.
+- **Long runs:** run `codex exec` in the background. Unlike `clink`, it has no one-minute client limit. ⚠ Keep `< /dev/null`: with stdin left open, Codex waits on it forever before calling the model, and looks like it is running (`AI-USAGE.md`). Bound the run with `timeout`, and check that its log grows past `Reading additional input from stdin...`.
 - **Models:** Codex uses its configured default, `gpt-5.6-sol` at high effort. `-m` picks another from `codex debug models`.
 - **PAL's API tools** (`codereview`, `secaudit`, `consensus`, `apilookup`, `chat`) are optional second opinions. Pass real absolute paths.
 - **Output:** everything an assistant returns is a proposal. Review it line by line and log its mistakes in `AI-USAGE.md`.

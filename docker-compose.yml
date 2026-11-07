@@ -21,5 +21,53 @@ services:
       retries: 5
       start_period: 5s
 
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: travel
+      POSTGRES_PASSWORD: travel
+      POSTGRES_DB: travel
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # -h forces TCP: the image's temporary init server listens on the Unix socket only, so a socket check reports healthy too early.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U travel -d travel"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  # One job that exits. The application never migrates itself: two simultaneous upgrades failed 8 of 8 rounds.
+  migrate:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    command: ["alembic", "-c", "app/db/alembic.ini", "upgrade", "head"]
+    environment:
+      APP_DATABASE_URL: postgresql+psycopg://travel:travel@db:5432/travel
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_DATABASE_URL: postgresql+psycopg://travel:travel@db:5432/travel
+      APP_TOKENS: ${APP_TOKENS:-token-ana:ana,token-ben:ben,token-cam:cam,token-dee:dee}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
 volumes:
   provider-mock-data:
+  app-db-data:

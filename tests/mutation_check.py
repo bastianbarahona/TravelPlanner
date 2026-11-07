@@ -1,9 +1,9 @@
-"""Proves the suite can fail. Not collected by pytest. Run: python tests/mutation_check.py
+"""Proves the suites can fail. Not collected by pytest. Run: python tests/mutation_check.py
 
-Each mutation breaks one rule in a temporary copy of the mock, then expects pytest to
-fail. A survivor is a rule no test protects. A stale entry means the source changed
-and the mutation no longer applies. The first column is the required test number in
-provider-mock/README.md, or a dash for rules beyond those ten.
+Each mutation breaks one rule in a temporary source copy, then expects pytest to fail.
+A survivor is a rule no test protects. A stale entry means the source changed and the
+mutation no longer applies. Mock numbers come from provider-mock/README.md; app
+mutations are A01 onward. Pass ``app`` to run only app mutations.
 """
 import os
 import re
@@ -27,7 +27,7 @@ AVAILABILITY_CHECK = """        if not offer["available"]:
 """
 ACCEPT = "        return 201, accept_booking("
 
-MUTATIONS = [
+MOCK_MUTATIONS = [
     # Test 1: every response validates against the contract.
     ("1", "timestamps lose their offset", MAIN, [('moment.isoformat().replace("+00:00", "Z")', "moment.replace(tzinfo=None).isoformat()")]),
     ("1", "search response gains a field", MAIN, [('"searchedAt": to_timestamp(now()),', '"searchedAt": to_timestamp(now()), "extra": None,')]),
@@ -114,21 +114,123 @@ MUTATIONS = [
 ]
 
 
-def run(number, label, filename, replacements):
+DESTINATIONS_AFTER_GUARD = """    # Optimistic lock. A concurrent writer that got here first leaves zero rows to update.
+    updated = session.execute(
+        update(Trip).where(Trip.id == trip_id, Trip.version == version).values(**values, version=Trip.version + 1)
+    )
+    if updated.rowcount == 0:
+        raise version_conflict(session, caller, trip_id)
+    if "destinations" in changes:  # only after the guarded update won, in the same transaction
+        session.execute(delete(TripDestination).where(TripDestination.trip_id == trip_id))
+        session.execute(
+            insert(TripDestination),
+            [{"trip_id": trip_id, "position": i, "name": name} for i, name in enumerate(changes["destinations"])],
+        )
+"""
+DESTINATIONS_BEFORE_GUARD = """    if "destinations" in changes:
+        session.execute(delete(TripDestination).where(TripDestination.trip_id == trip_id))
+        session.execute(
+            insert(TripDestination),
+            [{"trip_id": trip_id, "position": i, "name": name} for i, name in enumerate(changes["destinations"])],
+        )
+    # Optimistic lock. A concurrent writer that got here first leaves zero rows to update.
+    updated = session.execute(
+        update(Trip).where(Trip.id == trip_id, Trip.version == version).values(**values, version=Trip.version + 1)
+    )
+    if updated.rowcount == 0:
+        raise version_conflict(session, caller, trip_id)
+"""
+BAD_JSON_BRANCH = """    if status == 400:
+        # FastAPI's 400 for a body it cannot read: undecodable JSON (invalid UTF-8, Python's int digit limit) answers like
+        # malformed JSON; a client that disconnected mid-body gets none. The digit limit stays on: denial-of-service guard.
+        return error_response(422, "VALIDATION_FAILED", "The request is invalid.", {"errors": [{"field": "body", "message": BAD_JSON}]})
+"""
+
+APP_MUTATIONS = [
+    # Permissions and route coverage.
+    ("A01", "nonparticipant gets through trip_member", "api/deps.py", [('    if role is None:\n        raise not_found()\n', '    if False:\n        raise not_found()\n')]),
+    ("A02", "trip organizer stops checking the role", "api/deps.py", [('    if access.role != "organizer":\n', '    if False:\n')]),
+    ("A03", "current user accepts any authorization scheme", "api/deps.py", [('TOKENS.get(token) if scheme.lower() == "bearer" else None', 'TOKENS.get(token)')]),
+    ("A04", "collection routes lose authentication dependencies", "api/trips.py", [
+        ('collection = APIRouter(prefix="/trips", dependencies=[Depends(current_user)])', 'collection = APIRouter(prefix="/trips")'),
+        ('def create_trip(body: CreateTrip, user: str = Depends(current_user), session=Depends(get_session)):', 'def create_trip(body: CreateTrip, user: str = "ana", session=Depends(get_session)):'),
+        ('def list_trips(user: str = Depends(current_user), session=Depends(get_session)):', 'def list_trips(user: str = "ana", session=Depends(get_session)):'),
+    ]),
+    ("A05", "a new organizer route gets no dependencies", "api/trips.py", [
+        ('organizers = APIRouter(prefix="/trips/{tripId}", dependencies=[Depends(trip_organizer)])', 'organizers = APIRouter(prefix="/trips/{tripId}")'),
+        ('\n\n@collection.post("", status_code=201)', '\n\n@organizers.post("/extra")\ndef extra():\n    return {}\n\n\n@collection.post("", status_code=201)'),
+    ]),
+    ("A06", "organizer routes fall back to trip_member", "api/trips.py", [("trip_organizer", "trip_member")]),
+    ("A07", "participant routes fall back to trip_member", "api/participants.py", [("trip_organizer", "trip_member")]),
+    ("A08", "trip list stops filtering by caller", "services/trips.py", [('    return trip_views(session, caller, Trip.id.in_(mine))', '    return trip_views(session, caller)')]),
+    ("A09", "canonical UUID check is removed", "api/deps.py", [('    if str(trip_id) != tripId.lower():  # UUID() also takes braces, urn: and underscores\n        raise not_found()\n', '')]),
+    ("A10", "organizer rows can be changed or removed", "services/participants.py", [('    if role == "organizer":\n', '    if False:\n')]),
+    ("A11", "known_user accepts an unknown identity", "api/deps.py", [('    if userId not in IDENTITIES:\n', '    if False:\n')]),
+    ("A12", "health route disappears from the schema", "main.py", [('@app.get("/health")', '@app.get("/health", include_in_schema=False)')]),
+    # Money boundaries and representation.
+    ("A13", "amount loses its integer digit bound", "money.py", [('(0|[1-9][0-9]{0,9})', '(0|[1-9][0-9]*)')]),
+    ("A14", "amount accepts one decimal", "money.py", [('[0-9]{2}")', '[0-9]{1,2}")')]),
+    ("A15", "amount accepts a leading zero", "money.py", [('r"(0|[1-9][0-9]{0,9})\\.[0-9]{2}"', 'r"[0-9]{1,10}\\.[0-9]{2}"')]),
+    ("A16", "amount validation uses match instead of fullmatch", "money.py", [('AMOUNT.fullmatch(text)', 'AMOUNT.match(text)')]),
+    ("A17", "formatted amount loses its two decimals", "money.py", [('    return f"{amount:.2f}"', '    return str(amount).rstrip("0").rstrip(".")')]),
+    ("A18", "a truth test skips a zero budget patch", "services/trips.py", [('    if "budget_usd" in changes:\n', '    if parse_amount(changes.get("budget_usd", "0.00")):\n')]),
+    # Optimistic versioning and participant concurrency.
+    ("A19", "version leaves the guarded UPDATE", "services/trips.py", [('where(Trip.id == trip_id, Trip.version == version)', 'where(Trip.id == trip_id)')]),
+    ("A20", "trip version increment is removed", "services/trips.py", [('version=Trip.version + 1', 'version=version')]),
+    ("A21", "zero rowcount is ignored", "services/trips.py", [('    if updated.rowcount == 0:\n        raise version_conflict(session, caller, trip_id)\n', '')]),
+    ("A22", "destinations are replaced before the version guard", "services/trips.py", [(DESTINATIONS_AFTER_GUARD, DESTINATIONS_BEFORE_GUARD)]),
+    ("A23", "version conflict current state is empty", "services/trips.py", [('{"current": get_trip(session, caller, trip_id)}', '{"current": {}}')]),
+    ("A24", "participant insert loses ON CONFLICT", "services/participants.py", [('        .on_conflict_do_nothing()\n', '')]),
+    ("A25", "participant insert becomes check then insert", "services/participants.py", [
+        ('    row = session.execute(\n        insert(TripParticipant)', '    if session.scalar(select(TripParticipant.user_id).where(TripParticipant.trip_id == trip_id, TripParticipant.user_id == user_id)) is not None:\n        raise ApiError(409, "PARTICIPANT_EXISTS", "That user is already on the trip.")\n    row = session.execute(\n        insert(TripParticipant)'),
+        ('        .on_conflict_do_nothing()\n', ''),
+    ]),
+    # UTC date rules and error normalization.
+    ("A26", "UTC date becomes date.today", "domain/rules.py", [('datetime.now(UTC).date()', 'date.today()')]),
+    ("A27", "one day start tolerance is removed", "domain/rules.py", [(' - timedelta(days=1)', '')]),
+    ("A28", "equal trip dates are refused", "domain/rules.py", [('    if ends_on < starts_on:\n', '    if ends_on <= starts_on:\n')]),
+    ("A29", "patch start-date check is ignored", "services/trips.py", [('check_start=starts_on.isoformat() != stored["startsOn"]', 'check_start=False')]),
+    ("A30", "undecodable JSON keeps FastAPI's 400", "main.py", [(BAD_JSON_BRANCH, '')]),
+    ("A31", "unknown route gets a different message", "main.py", [('404: not_found().message', '404: "Route not found."')]),
+    ("A32", "organizer inserted after the trip is committed", "services/trips.py", [
+        ('    session.execute(insert(TripParticipant).values(trip_id=trip_id, user_id=caller, role="organizer"))', '    session.commit()\n    session.execute(insert(TripParticipant).values(trip_id=trip_id, user_id=caller, role="organizer"))'),
+    ]),
+    ("A33", "version is no longer a strict integer", "api/schemas.py", [
+        ('    version: int = Field(strict=True)', '    version: int'),
+    ]),
+    ("A34", "request bodies accept unknown fields", "api/schemas.py", [
+        ('    model_config = ConfigDict(extra="forbid", alias_generator=to_camel)', '    model_config = ConfigDict(extra="ignore", alias_generator=to_camel)'),
+    ]),
+    ("A35", "a validation message echoes the input", "main.py", [
+        ('    message = error["msg"].removeprefix("Value error, ")', '    message = error["msg"].removeprefix("Value error, ") + repr(error.get("input"))'),
+    ]),
+]
+
+
+def run(number, label, filename, replacements, suite="mock"):
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workspace:
         copy = Path(workspace)
-        shutil.copytree(ROOT / "provider-mock", copy / "provider-mock", ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copytree(ROOT / "contracts", copy / "contracts")
-        target = copy / "provider-mock" / filename
+        source_dir = "app" if suite == "app" else "provider-mock"
+        shutil.copytree(ROOT / source_dir, copy / source_dir, ignore=shutil.ignore_patterns("__pycache__"))
+        if suite == "mock":
+            shutil.copytree(ROOT / "contracts", copy / "contracts")
+        target = copy / source_dir / filename
         source = target.read_text(encoding="utf-8")
         for old, new in replacements:
             if old not in source:
                 return "STALE", ""
             source = source.replace(old, new)
         target.write_text(source, encoding="utf-8")
+        tests = (
+            [str(path) for path in sorted((ROOT / "tests").glob("test_app_*.py"))]
+            if suite == "app"
+            else [str(ROOT / "tests"), "--ignore-glob=*test_app_*.py"]
+        )
+        variable = "APP_SOURCE_ROOT" if suite == "app" else "MOCK_APP_DIR"
+        source_root = copy if suite == "app" else copy / source_dir
         result = subprocess.run(
-            [sys.executable, "-m", "pytest", str(ROOT / "tests"), "-x", "-q", "--no-header", "-p", "no:cacheprovider"],
-            env={**os.environ, "MOCK_APP_DIR": str(copy / "provider-mock")},
+            [sys.executable, "-m", "pytest", *tests, "-x", "-q", "--no-header", "-p", "no:cacheprovider"],
+            env={**os.environ, variable: str(source_root)},
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -138,18 +240,22 @@ def run(number, label, filename, replacements):
     if result.returncode == 0:
         return "SURVIVED", ""
     match = re.search(r"^(?:FAILED|ERROR) tests[/\\](\S+)", result.stdout, re.MULTILINE)
-    return "killed", match.group(1) if match else "the mock did not start"
+    return "killed", match.group(1) if match else f"the {suite} did not start"
 
 
 def main():
-    only = sys.argv[1:]  # test numbers, or words from a mutation's label
+    only = sys.argv[1:]  # mutation numbers, words from labels, or "app"
+    app_only = "app" in only
+    only = [word for word in only if word != "app"]
     results = []
-    for number, label, filename, replacements in MUTATIONS:
-        if only and not any(word == number or word in label for word in only):
-            continue
-        outcome, killer = run(number, label, filename, replacements)
-        results.append(outcome)
-        print(f"{outcome:9} {number:>2}  {label}  <-  {killer}", flush=True)
+    suites = [("app", APP_MUTATIONS)] if app_only else [("mock", MOCK_MUTATIONS), ("app", APP_MUTATIONS)]
+    for suite, mutations in suites:
+        for number, label, filename, replacements in mutations:
+            if only and not any(word == number or word in label for word in only):
+                continue
+            outcome, killer = run(number, label, filename, replacements, suite)
+            results.append(outcome)
+            print(f"{outcome:9} {number:>3}  {label}  <-  {killer}", flush=True)
     bad = len(results) - results.count("killed")
     print(f"\n{results.count('killed')}/{len(results)} mutations killed, {bad} not killed")
     return 1 if bad else 0

@@ -19,6 +19,18 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-07: `clink` in a fresh PAL
+
+The owner asked for the live test that the first check of Iteration 2 could not run. A script started a new PAL over stdio and called the real `clink` tool, so `working_dir` came from the current file. Each role tried to create a uniquely named empty file at six paths. The disk matched Codex's report, and every probe was removed.
+
+| Run | Roles | Starts in | `C:\DEV` | Another project | Main `.git` | Main checkout | Main `contracts/` | This worktree |
+|---|---|---|---|---|---|---|---|---|
+| Fresh PAL, live `clink` | `pal_qa`, `pal_dev` | `C:\DEV\TravelPlanner` | Denied | Denied | Denied | **Written** | **Written** | **Written** |
+
+A session's PAL keeps the configuration it started with: this session's, older than the edit, still answered `C:\DEV` in the same test.
+
+**Result:** item 8 is proven live, and the change keeps Codex out of `C:\DEV` and other projects. `clink` stays banned here, because both roles still wrote in the main checkout and its `contracts/`. The `-s workspace-write` of `pal_dev` does not change that, because `working_dir` puts them inside its workspace. After the test, the contract hash was unchanged and the main checkout was clean.
+
 ### 2026-11-07: Iteration 2, cross-review
 
 **First check.** The Iteration 2 plan asked for four proofs before relying on the team.
@@ -27,8 +39,8 @@ None of this is an application dependency.
 |---|---|
 | Codex through the read-only command | Passed: it answered from the worktree, a write was denied, and no file reached the disk |
 | Ponytail | Passed: the hook is active, and plugin 4.8.4 is enabled at user and project scope |
-| Subagents load with their model and effort | Partly. `dev-principal` and `qa-lead` report `claude-sonnet-5-5`, `director-proyecto` reports `claude-opus-5-5`, and their tools match. This is self-report: their transcript files were empty, and effort is not visible |
-| A fresh PAL starts `clink` in `C:\DEV\TravelPlanner` | Not run. The permission classifier denied the probe, and it was not retried, because `CLAUDE.md` forbids `clink` here. `codex.json` reads the right `working_dir`, but it stays unproven live |
+| Subagents load with their model and effort | Partly. `dev-principal` and `qa-lead` report `claude-sonnet-5-5`, `director-proyecto` reports `claude-opus-5-5`, and their tools match. This is self-report: their transcript files were empty, and effort is not visible. The owner accepted these models on 2026-11-07 |
+| A fresh PAL starts `clink` in `C:\DEV\TravelPlanner` | Not run here. The permission classifier denied the probe, and it was not retried, because `CLAUDE.md` forbids `clink` here. The owner then asked for it, and it passed (entry above) |
 
 **Who validated whom.** The owner asked that Codex and Claude Sonnet validate each other on every artifact. Codex wrote the tests from the brief without reading `app/`, so neither author could fit its work to the other's.
 
@@ -92,7 +104,7 @@ The effect was tested with the same command `clink` will run after a restart, fr
 | Live `clink`, stale configuration | `pal_qa`, `pal_dev` | **Written** | **Written** | Not tried | Written | Written | Written |
 | Same command after a restart | `pal_qa`, `pal_dev` | Denied | Denied | Denied | Written | Written | Written |
 
-After the owner restarted PAL, a live `clink` probe from this session still started in `C:\DEV` and wrote there. Each session has its own PAL: this session's dates from 01:50, and the restart reached another one. A fresh load of PAL's registry returns `working_dir = C:\DEV\TravelPlanner`, so the file is proven and only the live call is pending, for the next session.
+After the owner restarted PAL, a live `clink` probe from this session still started in `C:\DEV` and wrote there. Each session has its own PAL: this session's dates from 01:50, and the restart reached another one. A fresh load of PAL's registry returns `working_dir = C:\DEV\TravelPlanner`, so the file is proven. The live call is in the entry "`clink` in a fresh PAL".
 
 So the change protects other projects once each PAL restarts. `clink` stays banned here: `pal_qa` passes no `-s` and can write, `contracts/` stays writable, and it starts in the main checkout, not in a session's worktree.
 

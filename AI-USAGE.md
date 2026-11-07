@@ -7,6 +7,8 @@ How AI is used in this repository and how its output is verified. The log record
 | Piece | Where | Needs |
 |---|---|---|
 | Project rules | `CLAUDE.md` | Claude Code |
+| YAGNI for Claude | `.claude/settings.json` declares the Ponytail plugin | Claude Code, with the plugin installed |
+| YAGNI for Codex | `AGENTS.md` | Codex |
 | Role matrix and protocol | `CLAUDE.md`, "Multi-model assistant protocol (PAL)" | |
 | Director: `director-proyecto` | `.claude/agents/` | Claude Code, Opus, high effort |
 | Dev and QA: `dev-principal`, `qa-lead` | `.claude/agents/` | Claude Code, Sonnet, high effort |
@@ -16,6 +18,67 @@ How AI is used in this repository and how its output is verified. The log record
 None of this is an application dependency.
 
 ## Log
+
+### 2026-11-07: Ponytail
+
+**Integration.** Ponytail 4.8.4 (MIT) applies YAGNI to every assistant. Two pieces, because Codex does not read Claude skills:
+
+| Assistant | How it loads | Evidence |
+|---|---|---|
+| Claude | Project declaration in `.claude/settings.json`. The plugin's hooks also reach subagents. | Active here at user scope. **Not proven on a clean machine:** with an empty configuration, `claude plugin list` shows nothing, and the interactive offer to install could not be tested from here. `AGENTS.md` holds the same ladder as a fallback. |
+| Codex | `AGENTS.md`, adapted from Ponytail's own file | Run from the root and from `tests/`, Codex quoted rung 1 and the precedence sentence. A control outside the repository answered `NO PROJECT RULES`. |
+
+**Limits on it,** in `CLAUDE.md`: it shortens solutions, never guarantees. Its "one check" yields to the required tests, and its "fewest files" to the module layout.
+
+**Debt ledger:** two `ponytail:` comments so far, both in `provider-mock/main.py`: control state in memory, and reads taking the write lock. Both are already in `docs/STATUS.md`, Section 2.6.
+
+### 2026-11-07: `working_dir` change and the contract barrier
+
+**Item 8.** The owner changed `working_dir` in `~/.pal/cli_clients/codex.json` from `C:/DEV` to `C:/DEV/TravelPlanner`. The file is right, but the change is not live yet: PAL caches its configuration in `_REGISTRY` when it starts, and its processes were older than the edit. Through `clink`, both roles still started in `C:\DEV` and wrote everywhere.
+
+The effect was tested with the same command `clink` will run after a restart, from `C:\DEV\TravelPlanner`. Results were read from the disk:
+
+| Run | Roles | `C:\DEV` | Another project | Main `.git` | Main checkout | Main `contracts/` | This worktree |
+|---|---|---|---|---|---|---|---|
+| Live `clink`, stale configuration | `pal_qa`, `pal_dev` | **Written** | **Written** | Not tried | Written | Written | Written |
+| Same command after a restart | `pal_qa`, `pal_dev` | Denied | Denied | Denied | Written | Written | Written |
+
+After the owner restarted PAL, a live `clink` probe from this session still started in `C:\DEV` and wrote there. Each session has its own PAL: this session's dates from 01:50, and the restart reached another one. A fresh load of PAL's registry returns `working_dir = C:\DEV\TravelPlanner`, so the file is proven and only the live call is pending, for the next session.
+
+So the change protects other projects once each PAL restarts. `clink` stays banned here: `pal_qa` passes no `-s` and can write, `contracts/` stays writable, and it starts in the main checkout, not in a session's worktree.
+
+**`attrib +R` tested as a barrier,** on copies of the contract, under `workspace-write`. It is not one.
+
+| Attempt | Result |
+|---|---|
+| `Set-Content` | Stopped |
+| Python `open()` | Stopped |
+| Codex's own edit tool | Stopped |
+| `Set-Content -Force` | **Tampered** |
+| `attrib -R`, then write | **Tampered** |
+| Rename, then write | **Tampered** |
+| `cmd /c del /f` | **Deleted** |
+
+It is also not versioned. A fresh clone does not have it, and a `git switch` that changes the file silently drops it. It stops accidents, not an agent that insists, so it was not applied.
+
+**What works instead: leaving `contracts/` outside the workspace.** Tested on copies with `codex exec -C <dir> --add-dir <dir2> -s workspace-write`:
+
+| Attempt on `contracts/` | Result |
+|---|---|
+| Create a file | Denied |
+| Overwrite with `Set-Content` | Denied |
+| Overwrite with Python `open()` | Denied |
+| `cmd /c del /f` | Denied |
+| `cmd /c ren` | Denied |
+| Read | Allowed |
+
+The directories passed with `-C` and `--add-dir` stayed writable, and a file in the repository root was denied. This needs no per-clone step, and Codex cannot undo it. It does not cover Claude: the guards there are the hash test, CI and `git diff -- contracts/`.
+
+| What went wrong | How it was detected | What changed |
+|---|---|---|
+| The instruction called `attrib +R` a real barrier. | Testing it on copies | Not applied. A narrower workspace replaces it. |
+| Two "protected" results in the first `attrib` run, and one in the workspace run, were false: Python could not start, and a command policy blocked `Remove-Item` before the attribute or the sandbox came into play. | Reading Codex's report, not only the disk verdict | Retested with the `.venv` Python and `cmd /c del`. A blocked command proves nothing about the barrier. |
+| The entry below says `contracts/` stays writable to Codex. That was true of `-C <repo>` only. | This test | The Dev command no longer passes `<repo>`. |
 
 ### 2026-11-07: Roles, sandbox and architecture notes
 

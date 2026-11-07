@@ -54,6 +54,15 @@ contracts/openAPI.json   ← never modified
 2. **Every CI failure is alerted to the owner and logged** in `docs/STATUS.md`, Section 2.7, with no exceptions.
 3. **Every fix to a CI failure needs the owner's review and validation,** even when it is automatic, trivial or for a flaky failure. A fix may be pushed to the pull request so CI can check it, but it stays a proposal until the owner validates it. Auto-merge stays off.
 
+## Ponytail (YAGNI)
+
+Ponytail decides how little to build: stop at the first rung that holds, from "does this need to exist?" to the minimum code. Claude loads it as a plugin through `.claude/settings.json`, and Codex reads it from `AGENTS.md`, which holds the full ladder if the plugin is not installed.
+
+1. **It shortens solutions, never guarantees.** The contract, the ground rules and the definition of done win.
+2. **Tests:** its "one check" yields to rule 5 and to the tests each iteration requires, because those are explicit requests.
+3. **Layout:** its "fewest files" applies inside the module layout above, not instead of it.
+4. **Shortcuts:** a deliberate simplification carries a `ponytail:` comment naming its ceiling. Before closing an iteration, list them with `/ponytail-debt`, and record the ones that stay under "Limits I accept" in `ARCHITECTURE.md`.
+
 ## Scope guardrails — do NOT build
 
 - Currency conversion, payments, cancellations, refunds
@@ -94,13 +103,13 @@ Development tooling only: none of it enters `app/` or its dependencies. Subagent
 Whoever wrote a change does not review it: Claude reviews Codex's work, and Codex reviews Claude's.
 
 ```bash
-codex exec -C "<repo>" -s workspace-write "<prompt>"   # Dev
+codex exec -C "<repo>/<dir>" --add-dir "<repo>/<dir2>" -s workspace-write "<prompt>"   # Dev
 codex exec -C "<repo>" -s read-only "<prompt>"         # QA, or a second opinion for the Director
 ```
 
-- **Sandbox:** tested. With those flags, every write outside `<repo>` is denied, and `read-only` denies every write. Always pass `-s`: with no flag, Codex wrote in `<repo>`. `<repo>` is this repository's real absolute path, which may be a worktree.
-- ⚠ **Never use `clink` on this repository.** Its `working_dir` is fixed at `C:/DEV`, and any role can write there: in a test, `pal_qa` did. Changing that is user-level configuration, which only the owner touches.
-- ⚠ **Contract:** the sandbox does not protect `contracts/`, because a test wrote a new file there. The guards are a prompt that names it as read-only, the hash test, CI and a review of `git diff`. It is never a write target, and anything touching the provider puts it beside the code.
+- **Sandbox:** tested. `workspace-write` reaches only `-C` and each `--add-dir`, and `read-only` denies every write. Always pass `-s`: with no flag, Codex wrote. `<repo>` is this repository's real absolute path, which may be a worktree.
+- ⚠ **Never use `clink` on this repository.** Every role, `pal_qa` included, can write across `C:/DEV/TravelPlanner`, `contracts/` too, and it starts in the main checkout, not in a worktree. Its configuration is the owner's.
+- ⚠ **Contract:** never pass `<repo>` or `contracts/` as a writable directory. Left outside, Codex can read it, and writing, deleting and renaming there are denied. Second line: the hash test, CI and `git diff -- contracts/`. Anything touching the provider keeps it beside the code. `attrib +R` is not a barrier (`AI-USAGE.md`).
 - **Long runs:** run `codex exec` in the background. Unlike `clink`, it has no one-minute client limit.
 - **Models:** Codex uses its configured default, `gpt-5.6-sol` at high effort. `-m` picks another from `codex debug models`.
 - **PAL's API tools** (`codereview`, `secaudit`, `consensus`, `apilookup`, `chat`) are optional second opinions. Pass real absolute paths.

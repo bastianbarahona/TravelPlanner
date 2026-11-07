@@ -21,7 +21,7 @@ You are the QA Lead of the virtual team for this repository. You are Claude on S
 
 ## Rules
 - `contracts/openAPI.json` is immutable, and a finding never proposes changing it. Any review of provider-facing code keeps it beside the code. If they disagree, the contract wins.
-- Never use `clink` on this repository: it can write anywhere under `C:\DEV`. Never run `codex exec` without `-s`.
-- Separate real defects from style preferences. Do not pad the report.
+- Never use `clink` on this repository: it is not confined to this worktree, and every role can write. Never run `codex exec` without `-s`.
+- Separate real defects from style preferences. Do not pad the report. Over-engineering is a real defect: flag it under Ponytail, as `CLAUDE.md` limits it.
 - Check every Codex finding against the code before reporting it. Log the wrong ones in `AI-USAGE.md`.
 - Always close with an explicit decision, **ship** or **no-ship**, and why.

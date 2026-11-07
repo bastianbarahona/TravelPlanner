@@ -18,7 +18,8 @@ As of commit `59cf671` on `main`, where CI passes.
 | Error handling per code | Done at contract level | `docs/CONTRACT_NOTES.md`, Section 3 |
 | Provider mock: storage, fixtures, test controls | Done | `provider-mock/README.md` |
 | CI and pull request rules | Done | `CLAUDE.md`, `.github/workflows/ci.yml` |
-| Team roles and Codex sandbox | Done and tested, except the subagents at runtime | `CLAUDE.md`, `AI-USAGE.md` |
+| Team roles, Codex sandbox and contract barrier | Done and tested, except the subagents at runtime | `CLAUDE.md`, `AI-USAGE.md` |
+| Ponytail (YAGNI) for Claude and Codex | Done | `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` |
 | Architecture decisions | Recorded. Modular monolith confirmed by the owner. | `CLAUDE.md`, `ARCHITECTURE.md` |
 | Application data model and API | Planned, not started | Section 2.4 |
 | MCP tools and assistant | Not started, approach open (1.4, item 2) | |
@@ -32,7 +33,7 @@ Nothing below exists yet unless marked.
 | Deliverable (candidate guide) | State |
 |---|---|
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
-| Development harness | Partial: `CLAUDE.md`, GitHub Actions, the team protocol and `.claude/agents/` |
+| Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
 | Backend | Not started |
 | Frontend | Not started |
@@ -74,7 +75,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 5 | Whether the recommendations pasted during review came from an AI. `AI-USAGE.md` holds them with their origin marked as open. | Iteration 8 |
 | 6 | The owner asked for documentation of each TTL tested, once tests cover them. Today the suite runs one TTL, the 900 second default, with the clock pinned around `validUntil`. The pinnable clock stays test-only. | Nothing yet |
 | 7 | The Gemini CLI refuses this account with `IneligibleTierError`. Restoring it is optional, because nothing depends on Gemini. | Nothing |
-| 8 | Through `clink`, any Codex role can write anywhere under `C:\DEV`, because `~/.pal/cli_clients/codex.json` fixes `working_dir` there. This repository avoids `clink`, but it still applies to other projects. Only the owner changes that configuration. | Nothing here |
+| 8 | The owner set `working_dir` to `C:/DEV/TravelPlanner`, and a test of the same command proves it keeps Codex out of `C:\DEV` and other projects. A fresh PAL loads it, but each session has its own PAL, cached at start. ⚠ Sessions already open keep `C:\DEV`: this one still wrote there after the owner's restart, which reached another session. `pal_qa` can still write, which `"role_args": ["-s", "read-only"]` would fix. Only the owner changes that file. | Other projects, while old sessions stay open |
 | 9 | The complete Codex review of `CONTRACT_NOTES.md` found no contradictions and three wording notes: line 106, line 182 and A44 (`AI-USAGE.md`). Rewording them is the owner's call, because those notes are accepted. | Nothing |
 
 ### 1.5 Housekeeping
@@ -97,6 +98,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 5. Close by updating this file, then commit only when the owner asks.
 6. Follow "CI and pull requests" in `CLAUDE.md`: every pull request is born with Auto-fix on, every CI failure is alerted and logged in 2.7, and every fix needs the owner's review and validation.
 7. Follow "Multi-model assistant protocol (PAL)" in `CLAUDE.md`: Codex runs from the CLI with `-s` and never through `clink`, whoever wrote a change does not review it, and mistakes go in `AI-USAGE.md`.
+8. Apply Ponytail as `CLAUDE.md` limits it. Before closing an iteration, review `ponytail:` comments with `/ponytail-debt`.
 
 ### 2.2 Iterations
 
@@ -162,8 +164,8 @@ Already settled: the modular monolith (`ARCHITECTURE.md`).
 **The team in this iteration**
 
 - Director: Claude Code on Opus at high effort, which is the session itself.
-- First check: the subagents load with their model and effort, and Codex answers through the read-only command. Neither has been proven for the subagents yet (`AI-USAGE.md`). If one fails, report it before relying on it.
-- Dev: `dev-principal`. Large work may go to Codex with `workspace-write`, and `git diff` is reviewed afterwards.
+- First check: the subagents load with their model and effort, Codex answers through the read-only command, a fresh PAL starts `clink` in `C:\DEV\TravelPlanner`, and Ponytail is active. The first three have not been proven live yet (`AI-USAGE.md`). If one fails, report it before relying on it.
+- Dev: `dev-principal`. Large work may go to Codex with `workspace-write`, given `app/` and `tests/` only, so `contracts/` stays out of reach. `app/` must exist first, and `git diff` is reviewed afterwards.
 - QA: `qa-lead`. Whoever wrote a change does not review it, so run the read-only Codex review on Claude's code, covering the permission, money and `version` rules.
 
 **Tests that must exist, and must be able to fail**
@@ -196,8 +198,7 @@ A32, A36 and A44.
 We are starting Iteration 2 as defined in docs/STATUS.md, Section 2.4. You are the
 Director.
 
-First, confirm the subagents load with their model and effort, and that Codex answers
-through the read-only command. Then list the decisions in Section 2.4 with your
+First, run the first check in Section 2.4 and report it. Then list the decisions in Section 2.4 with your
 recommendation, testing what has not been tested yet, and wait for my answers. Then
 implement only that scope, with the roles in CLAUDE.md. Every test must be able to fail.
 

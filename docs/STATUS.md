@@ -1,8 +1,8 @@
 # Project status and continuity plan
 
-As of branch `claude/iteration-2-director-089f39`, on top of `7fcd2f3`. It has not been pushed, so CI has not run on it.
+As of `main` at `df7ae61`, with Iteration 2 merged through pull request #3 and CI green.
 
-**Where we stand:** Iteration 2 is built and verified on this machine, and committed on its branch. It has not been pushed, so CI is unproven. The API covers trips, participants, permissions and optimistic locking on Postgres, next to the provider mock. The next step is a push, a pull request and green CI. Iteration 3 comes after that.
+**Where we stand:** Iteration 2 is merged, with CI green on Linux. The API covers trips, participants, permissions and optimistic locking on Postgres, next to the provider mock. The next step is Iteration 3.
 
 ---
 
@@ -18,7 +18,7 @@ As of branch `claude/iteration-2-director-089f39`, on top of `7fcd2f3`. It has n
 | Error handling per code | Done at contract level | `docs/CONTRACT_NOTES.md`, Section 3 |
 | Provider mock: storage, fixtures, test controls | Done | `provider-mock/README.md` |
 | CI and pull request rules | Done | `CLAUDE.md`, `.github/workflows/ci.yml` |
-| Team roles, Codex sandbox and contract barrier | Done. Subagent models are confirmed by self-report only, and their effort is not visible | `CLAUDE.md`, `AI-USAGE.md` |
+| Team roles, Codex sandbox and contract barrier | Done. Subagent models are confirmed by self-report only, their effort is not visible, and the owner accepted them | `CLAUDE.md`, `AI-USAGE.md` |
 | Ponytail (YAGNI) for Claude and Codex | Done | `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` |
 | Architecture decisions | Recorded. Modular monolith confirmed by the owner. | `CLAUDE.md`, `ARCHITECTURE.md` |
 | Application data model and API | Done for trips and participants | `ARCHITECTURE.md`, and Section 2.8 of this file |
@@ -35,10 +35,10 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Partial: trips, participants, permissions and persistence, on its branch and not merged |
+| Backend | Partial: trips, participants, permissions and persistence, merged |
 | Frontend | Not started |
 | Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: contract tests for the mock, run by GitHub Actions on every push, and 82 application tests that CI has not run yet |
+| Tests and evaluations | Partial: 234 contract tests for the mock and 82 application tests, run by GitHub Actions on every push |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example` |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Started: decisions, open proposals, guarantees and limits |
@@ -75,10 +75,10 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 5 | Whether the recommendations pasted during review came from an AI. `AI-USAGE.md` holds them with their origin marked as open. | Iteration 8 |
 | 6 | The owner asked for documentation of each TTL tested, once tests cover them. Today the suite runs one TTL, the 900 second default, with the clock pinned around `validUntil`. The pinnable clock stays test-only. | Nothing yet |
 | 7 | The Gemini CLI refuses this account with `IneligibleTierError`. Restoring it is optional, because nothing depends on Gemini. | Nothing |
-| 8 | The owner set `working_dir` to `C:/DEV/TravelPlanner`, and a test of the same command proves it keeps Codex out of `C:\DEV` and other projects. A fresh PAL loads it, but each session has its own PAL, cached at start. ⚠ Sessions already open keep `C:\DEV`: this one still wrote there after the owner's restart, which reached another session. `pal_qa` can still write, which `"role_args": ["-s", "read-only"]` would fix. Only the owner changes that file. | Other projects, while old sessions stay open |
+| 8 | The owner set `working_dir` to `C:/DEV/TravelPlanner`, and a live `clink` through a fresh PAL proves it keeps Codex out of `C:\DEV` and other projects (`AI-USAGE.md`). Each session has its own PAL, cached at start. ⚠ Sessions opened before the change keep `C:\DEV`. `pal_qa` can still write, which `"role_args": ["-s", "read-only"]` would fix. Only the owner changes that file. | Other projects, while old sessions stay open |
 | 9 | The complete Codex review of `CONTRACT_NOTES.md` found no contradictions and three wording notes: line 106, line 182 and A44 (`AI-USAGE.md`). Rewording them is the owner's call, because those notes are accepted. | Nothing |
-| 10 | Iteration 2 is committed on its branch but not pushed, so CI has not run on it (2.8). | Iteration 3 |
-| 11 | `clink` in a fresh PAL stays unproven: the permission classifier denied the probe (`AI-USAGE.md`). Nothing depends on it, because `CLAUDE.md` forbids `clink` here. | Nothing |
+| 10 | Closed on 2026-11-07: Iteration 2 is merged, with CI green on the branch and on `main` (2.8). | Nothing |
+| 11 | Closed on 2026-11-07: `clink` in a fresh PAL starts in `C:\DEV\TravelPlanner` and is denied outside it. It still writes in the main checkout and its `contracts/`, so `CLAUDE.md` keeps it banned here (`AI-USAGE.md`). | Nothing |
 
 ### 1.5 Housekeeping
 
@@ -101,13 +101,14 @@ The notes hold the detail. These are the ones an implementation most easily brea
 6. Follow "CI and pull requests" in `CLAUDE.md`: every pull request is born with Auto-fix on, every CI failure is alerted and logged in 2.7, and every fix needs the owner's review and validation.
 7. Follow "Multi-model assistant protocol (PAL)" in `CLAUDE.md`: Codex runs from the CLI with `-s` and `< /dev/null`, never through `clink`, whoever wrote a change does not review it, and mistakes go in `AI-USAGE.md`.
 8. Apply Ponytail as `CLAUDE.md` limits it. Before closing an iteration, review `ponytail:` comments with `/ponytail-debt`.
+9. Every worktree has its own `.venv`, which git ignores. Build it before the first test with `python -m venv .venv` and `.venv/Scripts/python -m pip install -r tests/requirements.txt`, rerun the install when a requirements file changes, and run every check with it.
 
 ### 2.2 Iterations
 
 | # | Goal | Stories | Done when | State |
 |---|---|---|---|---|
 | 1 | Repository base and provider mock | Foundation for US-03, US-07, US-08 | `docker compose up` runs the mock, and contract tests pass against it | ✓ Merged (2.6) |
-| 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | Committed on its branch, waiting for a push and CI (2.8) |
+| 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | ✓ Merged (2.8) |
 | 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | Next |
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | |
@@ -129,7 +130,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 
 ### 2.4 Next: Iteration 3, provider client, search, itinerary and budget
 
-A plan, not started. It begins only after Iteration 2 is merged with green CI.
+A plan, not started. Iteration 2, its precondition, is merged with green CI.
 
 **Scope**
 
@@ -191,7 +192,8 @@ entries A25, A28, A29, A31, A37, A43, A44 and A45.
 We are starting Iteration 3 as defined in docs/STATUS.md, Section 2.4. You are the
 Director.
 
-First, confirm that Iteration 2 is on main with green CI. Then list the decisions in
+First, build .venv in your worktree as rule 9 of Section 2.1 says, run the tests with
+it, and confirm that Iteration 2 is on main with green CI. Then list the decisions in
 Section 2.4 with your recommendation, testing what has not been tested yet, and wait
 for my answers. Then implement only that scope, with the roles in CLAUDE.md, and have
 Codex and Claude Sonnet review each other's artifacts. Every test must be able to fail.
@@ -274,7 +276,7 @@ Rule 6 of 2.1 applies. Newest first. A fix stays a proposal until the last colum
 
 ### 2.8 Iteration 2 record
 
-Built on branch `claude/iteration-2-director-089f39`. Not pushed yet.
+Merged through pull request #3, as `df7ae61`.
 
 **What exists:** `app/` (`api`, `domain`, `services`, `db`, `money.py`, `config.py`, its Dockerfile and requirements), Postgres and the `migrate` and `app` services in `docker-compose.yml`, and `tests/test_app_*.py` with `tests/app_support.py`. `tests/compose_smoke.py` and `tests/mutation_check.py` now cover the application.
 
@@ -319,6 +321,6 @@ The reasoning is in `ARCHITECTURE.md`.
 | Control: a new route added to the organizer router | The `/openapi.json` walk passes, so the route inherits the router's protection. Mutation A05 removes that protection and dies |
 | Cross-review | Every artifact was reviewed by the assistant that did not write it (`AI-USAGE.md`) |
 | `contracts/openAPI.json` | SHA-256 unchanged: `9bf9b93e…` |
-| GitHub Actions | ⚠ Not run: nothing has been pushed. `.github/workflows/ci.yml` needs no change, because `pytest tests` and the smoke already reach the application. The tests have only run on Windows |
+| GitHub Actions | Both jobs passed on `835c447` and on `main` at `df7ae61`. On Linux, `pytest tests` gave 316 passed with none skipped, and the compose smoke passed. `.github/workflows/ci.yml` needed no change |
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`.

@@ -54,6 +54,15 @@ contracts/openAPI.json   ← never modified
 2. **Every CI failure is alerted to the owner and logged** in `docs/STATUS.md`, Section 2.7, with no exceptions.
 3. **Every fix to a CI failure needs the owner's review and validation,** even when it is automatic, trivial or for a flaky failure. A fix may be pushed to the pull request so CI can check it, but it stays a proposal until the owner validates it. Auto-merge stays off.
 
+## Ponytail (YAGNI)
+
+Ponytail decides how little to build: stop at the first rung that holds, from "does this need to exist?" to the minimum code. Claude loads it as a plugin through `.claude/settings.json`, and Codex reads it from `AGENTS.md`, which holds the full ladder if the plugin is not installed.
+
+1. **It shortens solutions, never guarantees.** The contract, the ground rules and the definition of done win.
+2. **Tests:** its "one check" yields to rule 5 and to the tests each iteration requires, because those are explicit requests.
+3. **Layout:** its "fewest files" applies inside the module layout above, not instead of it.
+4. **Shortcuts:** a deliberate simplification carries a `ponytail:` comment naming its ceiling. Before closing an iteration, list them with `/ponytail-debt`, and record the ones that stay under "Limits I accept" in `ARCHITECTURE.md`.
+
 ## Scope guardrails — do NOT build
 
 - Currency conversion, payments, cancellations, refunds
@@ -80,3 +89,29 @@ If something feels like it needs a new layer, write the reason in `ARCHITECTURE.
 - `DEMO.md` — main workflow + failure and concurrency scenarios
 
 All repository documentation is written in **English**.
+
+## Multi-model assistant protocol (PAL)
+
+Development tooling only: none of it enters `app/` or its dependencies. Subagents live in `.claude/agents/`, and the evidence for this section is in `AI-USAGE.md`. Gemini is unavailable, and nothing may depend on it.
+
+| Role | Who | How |
+|---|---|---|
+| Director | Claude Code, Opus, high effort | The main session or `director-proyecto`. Plans and decides, and never implements. |
+| Dev | Claude Sonnet, high effort, and Codex | `dev-principal`. Codex writes with the Dev command below. |
+| QA | Claude Sonnet, high effort, and Codex | `qa-lead`. Codex reviews with the read-only command below. |
+
+Whoever wrote a change does not review it: Claude reviews Codex's work, and Codex reviews Claude's.
+
+```bash
+codex exec -C "<repo>/<dir>" --add-dir "<repo>/<dir2>" -s workspace-write "<prompt>"   # Dev
+codex exec -C "<repo>" -s read-only "<prompt>"         # QA, or a second opinion for the Director
+```
+
+- **Sandbox:** tested. `workspace-write` reaches only `-C` and each `--add-dir`, and `read-only` denies every write. Always pass `-s`: with no flag, Codex wrote. `<repo>` is this repository's real absolute path, which may be a worktree.
+- ⚠ **Never use `clink` on this repository.** Every role, `pal_qa` included, can write across `C:/DEV/TravelPlanner`, `contracts/` too, and it starts in the main checkout, not in a worktree. Its configuration is the owner's.
+- ⚠ **Contract:** never pass `<repo>` or `contracts/` as a writable directory. Left outside, Codex can read it, and writing, deleting and renaming there are denied. Second line: the hash test, CI and `git diff -- contracts/`. Anything touching the provider keeps it beside the code. `attrib +R` is not a barrier (`AI-USAGE.md`).
+- **Long runs:** run `codex exec` in the background. Unlike `clink`, it has no one-minute client limit.
+- **Models:** Codex uses its configured default, `gpt-5.6-sol` at high effort. `-m` picks another from `codex debug models`.
+- **PAL's API tools** (`codereview`, `secaudit`, `consensus`, `apilookup`, `chat`) are optional second opinions. Pass real absolute paths.
+- **Output:** everything an assistant returns is a proposal. Review it line by line and log its mistakes in `AI-USAGE.md`.
+- **Cost:** PAL's API tools with OpenAI models spend API balance, which is low and has no automatic top-up. `codex exec` uses the ChatGPT subscription. Never use `gpt-5.2-pro` without asking the owner.

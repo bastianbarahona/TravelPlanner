@@ -104,6 +104,14 @@ Required tests, which `tests/mutation_check.py` uses as its numbering:
 9. Partial, complete, empty and failed searches.
 10. Invalid input always returns an `Error` body, never FastAPI's default.
 
+To prove the packaged mock keeps its data, with Docker running and port 4010 free:
+
+```bash
+python tests/compose_smoke.py
+```
+
+It books, kills the container, replaces it, and expects the same booking back from the volume. GitHub Actions runs this and the tests on every push.
+
 To prove the tests can fail:
 
 ```bash

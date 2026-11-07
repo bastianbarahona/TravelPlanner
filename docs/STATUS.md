@@ -35,7 +35,7 @@ Nothing below exists yet unless marked.
 | Backend | Not started |
 | Frontend | Not started |
 | Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: contract tests for the mock |
+| Tests and evaluations | Partial: contract tests for the mock, run by GitHub Actions on every push |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example` |
 | `README.md`, `ARCHITECTURE.md`, `DEMO.md`, `AI-USAGE.md` | Not started. `provider-mock/README.md` covers the mock |
 
@@ -72,7 +72,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 
 ### 1.5 Housekeeping
 
-- **This file moved into git with Iteration 1.** It used to be untracked in the main checkout, so worktrees could not see it. ⚠ Delete that untracked copy before merging the branch, or git refuses the merge.
+- **This file is versioned since Iteration 1,** so worktrees can read it. It used to be untracked in the main checkout.
 - **`docs/observaciones.md` is local only.** It is excluded through `.git/info/exclude`, so it has no backup and does not exist on other clones or in worktrees.
 - **Material for `AI-USAGE.md`,** all detected by testing or by reading the contract:
   - `Path(max_length=128)` answers 422, not 404.
@@ -88,6 +88,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
   - The first test suite let an invalid fixture through, because no test read that offer, and let a failed supplier's offers through, because no failed supplier had any. The first was detected by mutation, the second while writing the mutations.
   - The `UPDATE` that stores a resolved booking looked redundant, because a read recomputes the same state. Mutation exposed it: without it, a clock stepping back reverses a terminal outcome. It stayed, and it now has a test.
   - An assistant-written test helper contained a dead `if False` expression. Detected by reading the code before running the mutations.
+  - The assistant reported a booking surviving `docker compose restart` and `kill` as proof of durability. Both reuse the container, so neither proved the volume. Detected while designing CI, and `tests/compose_smoke.py` now recreates the container and fails without the volume.
 
 ---
 
@@ -157,7 +158,7 @@ Do not commit until I ask.
 
 ### 2.6 Iteration 1 record
 
-**What exists:** `provider-mock/` (service, fixtures, Dockerfile, README), `tests/`, `docker-compose.yml`, `.env.example`, `.gitignore`, `.gitattributes` and `.dockerignore`.
+**What exists:** `provider-mock/` (service, fixtures, Dockerfile, README), `tests/`, `.github/workflows/ci.yml`, `docker-compose.yml`, `.env.example`, `.gitignore`, `.gitattributes` and `.dockerignore`.
 
 **Decisions taken by the owner**
 

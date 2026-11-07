@@ -1,0 +1,1184 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Travel Provider Mock API",
+    "version": "0.1.0",
+    "summary": "External provider contract for the travel planning take-home.",
+    "description": "Implement this provider as a mock and integrate the application through HTTP. This is not the application's own API.\n\nThe mock represents multiple logical suppliers and supports transportation, accommodation, and activities. Provide data for all three categories and enough suppliers to demonstrate partial search results.\n\nAll monetary amounts use USD. Currency conversion is out of scope. Amounts are decimal strings. Offer prices cover all travelers and the entire returned segment, stay, or activity; do not multiply by nights or travelers again.\n\nExamples use an illustrative clock. Fixtures must use future dates or a documented controllable clock so validity and expiry scenarios remain reproducible.\n\nThe mock's implementation, data store, control interface, and packaging are not prescribed. Control endpoints are outside this public contract and application workflows must not depend on them.\n\nAccepted bookings, client references, and idempotency records survive transport failures and normal provider restarts. A deliberate fixture reset may clear them.\n\nBooking and reference visibility and idempotency keys are scoped to the authenticated caller. A demo bearer token is sufficient; implementing token issuance is out of scope.\n\nNo payments, cancellation, refunds, callbacks, or commercial travel integration are required."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:{port}/v1",
+      "description": "Example local mock URL; configure the application provider URL rather than relying on this port.",
+      "variables": {
+        "port": {
+          "default": "4010"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "providerToken": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Offers",
+      "description": "Search estimates and refresh current terms."
+    },
+    {
+      "name": "Bookings",
+      "description": "Create simulated bookings and reconcile their outcomes."
+    }
+  ],
+  "paths": {
+    "/offers/search": {
+      "post": {
+        "operationId": "searchOffers",
+        "tags": [
+          "Offers"
+        ],
+        "summary": "Search offers from one or more logical suppliers",
+        "description": "Search the inclusive destination-local calendar date window. startsOn must be on or before endsOn. Returned options must fit the requested party and date window. For transport, origin is required. Matching of destination and origin is case-insensitive; document fixture location names. An omitted providerId queries all configured suppliers supporting the category. A supplied providerId queries only that supplier; an unknown supplier returns 400. Partial results use 200 with partial=true and warnings for failed suppliers. If no queried supplier succeeds, return 503 or 429 for a rate-limited single-supplier query. A complete search with no matches returns 200, partial=false, and an empty offers array. Expired quote terms may be refreshed with a new revision before returning results. Search does not hold inventory or guarantee price.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              },
+              "example": {
+                "category": "accommodation",
+                "destination": "Lisbon",
+                "startsOn": "2030-06-10",
+                "endsOn": "2030-06-13",
+                "travelers": 2
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Complete or partial search results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                },
+                "examples": {
+                  "complete": {
+                    "value": {
+                      "offers": [
+                        {
+                          "id": "offer-hotel-001",
+                          "providerId": "supplier-a",
+                          "category": "accommodation",
+                          "title": "Three-night central hotel stay",
+                          "description": "One room for two travelers, breakfast included.",
+                          "destination": "Lisbon",
+                          "startsAt": "2030-06-10T15:00:00+01:00",
+                          "endsAt": "2030-06-13T11:00:00+01:00",
+                          "travelers": 2,
+                          "price": {
+                            "amount": "420.00",
+                            "currency": "USD"
+                          },
+                          "revision": "quote-hotel-001-v1",
+                          "available": true,
+                          "validUntil": "2030-06-01T12:15:00Z",
+                          "restrictions": [
+                            "Non-refundable simulated booking"
+                          ]
+                        }
+                      ],
+                      "partial": false,
+                      "warnings": [],
+                      "searchedAt": "2030-06-01T12:00:00Z"
+                    }
+                  },
+                  "partial": {
+                    "value": {
+                      "offers": [
+                        {
+                          "id": "offer-hotel-001",
+                          "providerId": "supplier-a",
+                          "category": "accommodation",
+                          "title": "Three-night central hotel stay",
+                          "description": "One room for two travelers, breakfast included.",
+                          "destination": "Lisbon",
+                          "startsAt": "2030-06-10T15:00:00+01:00",
+                          "endsAt": "2030-06-13T11:00:00+01:00",
+                          "travelers": 2,
+                          "price": {
+                            "amount": "420.00",
+                            "currency": "USD"
+                          },
+                          "revision": "quote-hotel-001-v1",
+                          "available": true,
+                          "validUntil": "2030-06-01T12:15:00Z",
+                          "restrictions": [
+                            "Non-refundable simulated booking"
+                          ]
+                        }
+                      ],
+                      "partial": true,
+                      "warnings": [
+                        {
+                          "providerId": "supplier-b",
+                          "code": "PROVIDER_UNAVAILABLE",
+                          "message": "Supplier B did not complete the search."
+                        }
+                      ],
+                      "searchedAt": "2030-06-01T12:00:00Z"
+                    }
+                  },
+                  "empty": {
+                    "value": {
+                      "offers": [],
+                      "partial": false,
+                      "warnings": [],
+                      "searchedAt": "2030-06-01T12:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/offers/{offerId}": {
+      "get": {
+        "operationId": "getOffer",
+        "tags": [
+          "Offers"
+        ],
+        "summary": "Retrieve the latest quote and availability for an offer",
+        "description": "Returns current offer terms, including availability, revision, and expiry. Refresh an expired quote with a future validUntil and a new revision when terms can still be quoted. An unavailable offer may be returned with available=false. Revision changes whenever the price, availability, schedule, party size, or validity deadline changes. No inventory hold or booking is created. A previously retrieved quote may still change before booking; POST /bookings validates it atomically.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OfferId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current offer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Offer"
+                },
+                "example": {
+                  "id": "offer-hotel-001",
+                  "providerId": "supplier-a",
+                  "category": "accommodation",
+                  "title": "Three-night central hotel stay",
+                  "description": "One room for two travelers, breakfast included.",
+                  "destination": "Lisbon",
+                  "startsAt": "2030-06-10T15:00:00+01:00",
+                  "endsAt": "2030-06-13T11:00:00+01:00",
+                  "travelers": 2,
+                  "price": {
+                    "amount": "420.00",
+                    "currency": "USD"
+                  },
+                  "revision": "quote-hotel-001-v1",
+                  "available": true,
+                  "validUntil": "2030-06-01T12:15:00Z",
+                  "restrictions": [
+                    "Non-refundable simulated booking"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/bookings": {
+      "post": {
+        "operationId": "createBooking",
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Create a simulated booking with idempotent retries",
+        "description": "For a new request, atomically compare expectedOfferRevision and expectedPrice against the current offer, check validUntil has not passed, and check availability. Expired quotes or mismatched revision/price return 409 OFFER_CHANGED; unavailable offers return 409 OFFER_UNAVAILABLE. Rejection does not create a booking.\n\nBefore checking current offer terms, resolve any existing Idempotency-Key for the caller. An identical request with that key returns the same booking's current state with 200, even if the quote has since expired or changed. A first acceptance returns 201. Concurrent identical requests create exactly one booking; the others return that same record. The same key with a different semantic request body returns 409 IDEMPOTENCY_CONFLICT; JSON property ordering does not make a body different.\n\nA new key with a clientReference already associated with an accepted request returns 409 REFERENCE_CONFLICT; it never creates another booking for that reference. Retain idempotency keys and their payload associations for at least seven days. Keep clientReference unique for the lifetime of the mock dataset.\n\nAn accepted booking may be pending, confirmed, or failed. Pending may transition to confirmed or failed; terminal outcomes do not reverse. A failed accepted request is replayed as failed rather than creating a replacement.\n\nAccepted bookings remain available through booking lookup and idempotent replay even when the create response is not received.\n\n400, 401, 429, and 503 responses do not create a new booking. A transport failure or missing response is not proof of rejection. Booking totals and accepted offer snapshots are immutable; only a pending booking's outcome and updatedAt may change.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingRequest"
+              },
+              "example": {
+                "clientReference": "trip-42-hotel-attempt-1",
+                "offerId": "offer-hotel-001",
+                "expectedOfferRevision": "quote-hotel-001-v1",
+                "expectedPrice": {
+                  "amount": "420.00",
+                  "currency": "USD"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay: current state of the previously accepted booking.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                },
+                "example": {
+                  "id": "booking-001",
+                  "clientReference": "trip-42-hotel-attempt-1",
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "revision": "quote-hotel-001-v1",
+                    "available": true,
+                    "validUntil": "2030-06-01T12:15:00Z",
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ]
+                  },
+                  "status": "confirmed",
+                  "createdAt": "2030-06-01T12:01:00Z",
+                  "updatedAt": "2030-06-01T12:01:00Z"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New accepted booking, which may be pending or terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                },
+                "examples": {
+                  "confirmed": {
+                    "value": {
+                      "id": "booking-001",
+                      "clientReference": "trip-42-hotel-attempt-1",
+                      "offer": {
+                        "id": "offer-hotel-001",
+                        "providerId": "supplier-a",
+                        "category": "accommodation",
+                        "title": "Three-night central hotel stay",
+                        "description": "One room for two travelers, breakfast included.",
+                        "destination": "Lisbon",
+                        "startsAt": "2030-06-10T15:00:00+01:00",
+                        "endsAt": "2030-06-13T11:00:00+01:00",
+                        "travelers": 2,
+                        "price": {
+                          "amount": "420.00",
+                          "currency": "USD"
+                        },
+                        "revision": "quote-hotel-001-v1",
+                        "available": true,
+                        "validUntil": "2030-06-01T12:15:00Z",
+                        "restrictions": [
+                          "Non-refundable simulated booking"
+                        ]
+                      },
+                      "status": "confirmed",
+                      "createdAt": "2030-06-01T12:01:00Z",
+                      "updatedAt": "2030-06-01T12:01:00Z"
+                    }
+                  },
+                  "pending": {
+                    "value": {
+                      "id": "booking-001",
+                      "clientReference": "trip-42-hotel-attempt-1",
+                      "offer": {
+                        "id": "offer-hotel-001",
+                        "providerId": "supplier-a",
+                        "category": "accommodation",
+                        "title": "Three-night central hotel stay",
+                        "description": "One room for two travelers, breakfast included.",
+                        "destination": "Lisbon",
+                        "startsAt": "2030-06-10T15:00:00+01:00",
+                        "endsAt": "2030-06-13T11:00:00+01:00",
+                        "travelers": 2,
+                        "price": {
+                          "amount": "420.00",
+                          "currency": "USD"
+                        },
+                        "revision": "quote-hotel-001-v1",
+                        "available": true,
+                        "validUntil": "2030-06-01T12:15:00Z",
+                        "restrictions": [
+                          "Non-refundable simulated booking"
+                        ]
+                      },
+                      "status": "pending",
+                      "createdAt": "2030-06-01T12:01:00Z",
+                      "updatedAt": "2030-06-01T12:01:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/bookings/by-reference/{clientReference}": {
+      "get": {
+        "operationId": "getBookingByReference",
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Reconcile a booking using the caller's reference",
+        "description": "Read the caller's accepted booking by clientReference, including pending records. Lookups are consistent with committed accepted bookings. A 404 means no visible accepted record exists at lookup time; an in-flight create may still complete later. Provider outcomes contain no 'unknown' status: unknown is the application's uncertainty before it can reconcile the record.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ClientReference"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current booking state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                },
+                "example": {
+                  "id": "booking-001",
+                  "clientReference": "trip-42-hotel-attempt-1",
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "revision": "quote-hotel-001-v1",
+                    "available": true,
+                    "validUntil": "2030-06-01T12:15:00Z",
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ]
+                  },
+                  "status": "confirmed",
+                  "createdAt": "2030-06-01T12:01:00Z",
+                  "updatedAt": "2030-06-01T12:01:00Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}": {
+      "get": {
+        "operationId": "getBooking",
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Read the current state of a known booking",
+        "description": "Only the authenticated caller that created the booking can see it. Return 404 for missing or nonvisible records. Pending records may transition to confirmed or failed; terminal outcomes do not reverse.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BookingId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current booking state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Booking"
+                },
+                "example": {
+                  "id": "booking-001",
+                  "clientReference": "trip-42-hotel-attempt-1",
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "revision": "quote-hotel-001-v1",
+                    "available": true,
+                    "validUntil": "2030-06-01T12:15:00Z",
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ]
+                  },
+                  "status": "confirmed",
+                  "createdAt": "2030-06-01T12:01:00Z",
+                  "updatedAt": "2030-06-01T12:01:00Z"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "providerToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Service-to-service demo token, for example travel-demo-token. Token issuance and production authentication are out of scope. Scope booking visibility and deduplication to the caller represented by the token."
+      }
+    },
+    "parameters": {
+      "OfferId": {
+        "name": "offerId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "example": "offer-hotel-001"
+      },
+      "BookingId": {
+        "name": "bookingId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "example": "booking-001"
+      },
+      "ClientReference": {
+        "name": "clientReference",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "example": "trip-42-hotel-attempt-1"
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Stable key for one booking intent. Reuse for retries of the identical request. Scoped to the authenticated caller; retained at least seven days.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "example": "booking-intent-trip42-hotel1"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request parameters or body.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "BAD_REQUEST",
+              "message": "Invalid request parameters or body.",
+              "requestId": "request-demo-001"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The provider token is missing or invalid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "UNAUTHORIZED",
+              "message": "The provider token is missing or invalid.",
+              "requestId": "request-demo-001"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No visible record exists for the supplied identifier at lookup time.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "NOT_FOUND",
+              "message": "No visible record exists for the supplied identifier at lookup time.",
+              "requestId": "request-demo-001"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Booking not created: OFFER_CHANGED, OFFER_UNAVAILABLE, IDEMPOTENCY_CONFLICT, or REFERENCE_CONFLICT. A pre-existing accepted booking may already exist for an idempotency or reference conflict; use the matching reference to inspect it.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "changed": {
+                "value": {
+                  "code": "OFFER_CHANGED",
+                  "message": "Price, quote revision, or quote validity changed; review the latest offer.",
+                  "requestId": "request-demo-001"
+                }
+              },
+              "unavailable": {
+                "value": {
+                  "code": "OFFER_UNAVAILABLE",
+                  "message": "The offer is no longer available.",
+                  "requestId": "request-demo-001"
+                }
+              },
+              "keyConflict": {
+                "value": {
+                  "code": "IDEMPOTENCY_CONFLICT",
+                  "message": "This key was already used with a different request body.",
+                  "requestId": "request-demo-001"
+                }
+              },
+              "referenceConflict": {
+                "value": {
+                  "code": "REFERENCE_CONFLICT",
+                  "message": "This client reference belongs to an existing booking request.",
+                  "requestId": "request-demo-001"
+                }
+              }
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "The provider rate limit was reached.",
+        "headers": {
+          "Retry-After": {
+            "description": "Whole seconds to wait before another request.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "RATE_LIMITED",
+              "message": "The provider rate limit was reached.",
+              "requestId": "request-demo-001"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "The requested provider operation is temporarily unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "code": "PROVIDER_UNAVAILABLE",
+              "message": "The requested provider operation is temporarily unavailable.",
+              "requestId": "request-demo-001"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Currency": {
+        "type": "string",
+        "enum": [
+          "USD"
+        ],
+        "description": "Single currency used throughout the exercise. Budgets, offers, bookings, and documents use USD; conversion is out of scope."
+      },
+      "Category": {
+        "type": "string",
+        "enum": [
+          "transport",
+          "accommodation",
+          "activity"
+        ]
+      },
+      "Money": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Nonnegative decimal amount in major currency units, encoded as a string with exactly two fractional digits.",
+            "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{2}$",
+            "examples": [
+              "180.00",
+              "0.00"
+            ]
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "category",
+          "destination",
+          "startsOn",
+          "endsOn",
+          "travelers"
+        ],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "destination": {
+            "type": "string",
+            "description": "Fixture destination name; case-insensitive matching.",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "origin": {
+            "type": "string",
+            "description": "Origin for transport searches; required for transport.",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "startsOn": {
+            "type": "string",
+            "description": "First included destination-local calendar date.",
+            "format": "date"
+          },
+          "endsOn": {
+            "type": "string",
+            "description": "Last included destination-local calendar date; not before startsOn.",
+            "format": "date"
+          },
+          "travelers": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "providerId": {
+            "type": "string",
+            "description": "Optional logical supplier identifier. Omit to query all suppliers supporting the category.",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "category": {
+                  "const": "transport"
+                }
+              },
+              "required": [
+                "category"
+              ]
+            },
+            "then": {
+              "required": [
+                "origin"
+              ]
+            }
+          }
+        ]
+      },
+      "SearchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "offers",
+          "partial",
+          "warnings",
+          "searchedAt"
+        ],
+        "properties": {
+          "offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            }
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "True exactly when at least one queried supplier failed and at least one succeeded."
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Empty for a complete search; one entry for each failed supplier in a partial search.",
+            "items": {
+              "$ref": "#/components/schemas/SupplierWarning"
+            }
+          },
+          "searchedAt": {
+            "type": "string",
+            "description": "Provider search time.",
+            "format": "date-time"
+          }
+        }
+      },
+      "SupplierWarning": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "providerId",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_TIMEOUT",
+              "RATE_LIMITED"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Offer": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Price is the total for all travelers and the complete offered segment, stay, or activity. It is not a per-person or per-night price.",
+        "required": [
+          "id",
+          "providerId",
+          "category",
+          "title",
+          "description",
+          "destination",
+          "startsAt",
+          "endsAt",
+          "travelers",
+          "price",
+          "revision",
+          "available",
+          "validUntil"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable offer identity across quote revisions.",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "providerId": {
+            "type": "string",
+            "description": "Logical supplier identity.",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "destination": {
+            "type": "string",
+            "minLength": 1
+          },
+          "origin": {
+            "type": "string",
+            "description": "Origin for transportation; may be omitted for other categories.",
+            "minLength": 1
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "Start instant, including timezone offset.",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "description": "End instant, including timezone offset; later than startsAt.",
+            "format": "date-time"
+          },
+          "travelers": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "price": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "revision": {
+            "type": "string",
+            "description": "Opaque quote version. Changes with price, availability, schedule, party size, or validity deadline.",
+            "minLength": 1
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "validUntil": {
+            "type": "string",
+            "description": "Quote expires at this instant; a new acceptance at or after it must be rejected.",
+            "format": "date-time"
+          },
+          "restrictions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateBookingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clientReference",
+          "offerId",
+          "expectedOfferRevision",
+          "expectedPrice"
+        ],
+        "properties": {
+          "clientReference": {
+            "type": "string",
+            "description": "Caller-generated reference for one booking intent; unique within the caller's dataset.",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "offerId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "expectedOfferRevision": {
+            "type": "string",
+            "description": "Quote revision reviewed by the user.",
+            "minLength": 1
+          },
+          "expectedPrice": {
+            "$ref": "#/components/schemas/Money"
+          }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The accepted offer and price are immutable snapshots. Their validUntil describes the original quote, not the lifetime of a confirmed booking. A failed booking includes failure; pending and confirmed bookings omit it.",
+        "required": [
+          "id",
+          "clientReference",
+          "offer",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "clientReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "offer": {
+            "$ref": "#/components/schemas/Offer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "confirmed",
+              "failed"
+            ],
+            "description": "Provider outcome; unknown is a local client state, not a provider outcome."
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "Acceptance time.",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "Most recent outcome change; not before createdAt.",
+            "format": "date-time"
+          },
+          "failure": {
+            "$ref": "#/components/schemas/BookingFailure"
+          }
+        }
+      },
+      "BookingFailure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "BAD_REQUEST",
+              "UNAUTHORIZED",
+              "NOT_FOUND",
+              "OFFER_CHANGED",
+              "OFFER_UNAVAILABLE",
+              "IDEMPOTENCY_CONFLICT",
+              "REFERENCE_CONFLICT",
+              "RATE_LIMITED",
+              "PROVIDER_UNAVAILABLE"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation.",
+            "minLength": 1
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Identifier usable to correlate provider diagnostics.",
+            "minLength": 1
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional machine-readable context; no application should require an undocumented field."
+          }
+        }
+      }
+    },
+    "examples": {
+      "AccommodationOffer": {
+        "summary": "Accommodation price covers the complete stay and party.",
+        "value": {
+          "id": "offer-hotel-001",
+          "providerId": "supplier-a",
+          "category": "accommodation",
+          "title": "Three-night central hotel stay",
+          "description": "One room for two travelers, breakfast included.",
+          "destination": "Lisbon",
+          "startsAt": "2030-06-10T15:00:00+01:00",
+          "endsAt": "2030-06-13T11:00:00+01:00",
+          "travelers": 2,
+          "price": {
+            "amount": "420.00",
+            "currency": "USD"
+          },
+          "revision": "quote-hotel-001-v1",
+          "available": true,
+          "validUntil": "2030-06-01T12:15:00Z",
+          "restrictions": [
+            "Non-refundable simulated booking"
+          ]
+        }
+      },
+      "TransportOffer": {
+        "summary": "Transport price covers the returned segment and party.",
+        "value": {
+          "id": "offer-transport-001",
+          "providerId": "supplier-b",
+          "category": "transport",
+          "title": "Outbound flight",
+          "description": "Economy flight for two travelers.",
+          "destination": "Lisbon",
+          "startsAt": "2030-06-10T09:00:00+01:00",
+          "endsAt": "2030-06-10T11:45:00+01:00",
+          "travelers": 2,
+          "price": {
+            "amount": "280.00",
+            "currency": "USD"
+          },
+          "revision": "quote-transport-001-v1",
+          "available": true,
+          "validUntil": "2030-06-01T12:15:00Z",
+          "restrictions": [
+            "Cabin baggage only"
+          ],
+          "origin": "London"
+        }
+      },
+      "ConfirmedBooking": {
+        "value": {
+          "id": "booking-001",
+          "clientReference": "trip-42-hotel-attempt-1",
+          "offer": {
+            "id": "offer-hotel-001",
+            "providerId": "supplier-a",
+            "category": "accommodation",
+            "title": "Three-night central hotel stay",
+            "description": "One room for two travelers, breakfast included.",
+            "destination": "Lisbon",
+            "startsAt": "2030-06-10T15:00:00+01:00",
+            "endsAt": "2030-06-13T11:00:00+01:00",
+            "travelers": 2,
+            "price": {
+              "amount": "420.00",
+              "currency": "USD"
+            },
+            "revision": "quote-hotel-001-v1",
+            "available": true,
+            "validUntil": "2030-06-01T12:15:00Z",
+            "restrictions": [
+              "Non-refundable simulated booking"
+            ]
+          },
+          "status": "confirmed",
+          "createdAt": "2030-06-01T12:01:00Z",
+          "updatedAt": "2030-06-01T12:01:00Z"
+        }
+      }
+    }
+  }
+}

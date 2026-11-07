@@ -205,7 +205,8 @@ Every response, in every test, goes through `tests/contract.py`, using the clien
 | Responses declared in the contract and exercised | 28 of 28 |
 | `python tests/mutation_check.py` | 72 of 72 mutations killed, in 32 minutes. The first run killed 70, and its two survivors produced two new tests (1.5). |
 | `docker compose up` from clean, image built without cache | Healthy, running as a non-root user, with the control interface answering 404 |
-| Booking after `docker compose restart` and after `docker compose kill` | Byte-identical to the first response |
+| `python tests/compose_smoke.py` | Passes: a replay after a kill and in a new container is byte-identical to the first response. Without the volume mount it fails. |
+| GitHub Actions, `.github/workflows/ci.yml` | Runs the contract tests and the compose smoke on every push. The mutation check stays manual, because it takes 30 minutes. |
 | `docker compose stop` | Clean, in under 2 seconds |
 | Image built from files with CRLF line endings | Builds and serves. This stands in for a clean Windows clone, which needs a commit first. |
 | `contracts/openAPI.json` | SHA-256 equal to the committed blob: `9bf9b93e…` |

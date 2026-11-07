@@ -12,12 +12,61 @@ How AI is used in this repository and how its output is verified. The log record
 | Role matrix and protocol | `CLAUDE.md`, "Multi-model assistant protocol (PAL)" | |
 | Director: `director-proyecto` | `.claude/agents/` | Claude Code, Opus, high effort |
 | Dev and QA: `dev-principal`, `qa-lead` | `.claude/agents/` | Claude Code, Sonnet, high effort |
-| Codex for Dev and QA | `codex exec` with `-C` and `-s` | The Codex CLI with a ChatGPT subscription |
+| Codex for Dev and QA | `codex exec` with `-C`, `-s` and `< /dev/null` | The Codex CLI with a ChatGPT subscription |
 | PAL's API tools, optional | `codereview`, `secaudit`, `consensus` and others | The `pal` MCP server, registered at user level, and an OpenAI API key with balance |
 
 None of this is an application dependency.
 
 ## Log
+
+### 2026-11-07: Iteration 2, cross-review
+
+**First check.** The Iteration 2 plan asked for four proofs before relying on the team.
+
+| Check | Result |
+|---|---|
+| Codex through the read-only command | Passed: it answered from the worktree, a write was denied, and no file reached the disk |
+| Ponytail | Passed: the hook is active, and plugin 4.8.4 is enabled at user and project scope |
+| Subagents load with their model and effort | Partly. `dev-principal` and `qa-lead` report `claude-sonnet-5-5`, `director-proyecto` reports `claude-opus-5-5`, and their tools match. This is self-report: their transcript files were empty, and effort is not visible |
+| A fresh PAL starts `clink` in `C:\DEV\TravelPlanner` | Not run. The permission classifier denied the probe, and it was not retried, because `CLAUDE.md` forbids `clink` here. `codex.json` reads the right `working_dir`, but it stays unproven live |
+
+**Who validated whom.** The owner asked that Codex and Claude Sonnet validate each other on every artifact. Codex wrote the tests from the brief without reading `app/`, so neither author could fit its work to the other's.
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `app/`, compose | Claude Sonnet | Codex, read-only | 0, 1, 3 | Three fixed. Codex's fix for the fourth was rejected, and the limit recorded |
+| `tests/`, first round | Codex | Claude Sonnet (`qa-lead`) | 0, 3, 11 | All majors and eight minors accepted, three minors rejected |
+| `tests/`, second round and `tests/mutation_check.py` | Codex | Claude Sonnet (`qa-lead`) | 0, 1, 4 | The major and two minors applied, plus three more mutations. The rest was optional |
+| Sonnet's fixes, `ARCHITECTURE.md` | Claude Sonnet, Director | Codex, read-only | 0, 0, 5 | All applied |
+| This entry, `docs/STATUS.md` | Director | Codex, read-only | 0, 2, 3 | One major rejected: Codex looked for the 15 full starts in a log that held only the reduced measure, because the Director named that log. The run outputs confirm the figures. The rest was applied |
+
+Running the suite found no defect in `app/`: every failure was in the tests. The defects in the application came from the read-only review and from a control run. Codex's sandbox denied Python and Docker, so the Director ran everything it wrote.
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| Director | Started `codex exec` in the background with stdin left open. It printed `Reading additional input from stdin...` and waited for over six hours, before any model call. The Director told the owner both runs were working, without checking | The owner asked for the status. The logs held 39 bytes and each process had used about 0.1 seconds of CPU. Reproduced: with stdin open the command stayed blocked, and with `< /dev/null` it answered | Both relaunched. `CLAUDE.md` now requires `< /dev/null` and a bounded run |
+| Director | Told the owner that `alembic upgrade head` never exits | The probe called `p.wait()` before reading a full stderr pipe, so the probe blocked the process | Probe fixed with `communicate()`, and corrected to the owner |
+| Director | The brief said no route may sit outside the schema, but FastAPI registers `/openapi.json` that way | Claude Sonnet reported it while building | The test names that one route |
+| Director | Took a 422 on a `version` of 10^30 for a bug | Rerun with a real change: 409. The probe had sent nothing to change | No code change |
+| Director | A control run removed the volume mount but left an empty `volumes:` key. Its exit code 1 looked like proof that the smoke can fail | The log held no `AssertionError`: compose had rejected the file | Control redone. It now fails with `trip read answered 404, so the trip was lost` |
+| Director | The first measure of the compose race started only `db` and `migrate`, and its 0 of 10 would have cleared a real bug | A later full start failed on the real file | Measured on full starts |
+| Director | `docs/STATUS.md` counted US-02 as implemented, although the PRD also asks for planning, document, status and assistant permissions | Codex's review of the documentation | Reported as partial |
+| Director | `ARCHITECTURE.md` overclaimed four things: the refusal order, what replaces test identities, what the database refuses, and last-write-wins | Codex's re-review, each with a concrete input | All four corrected |
+| Claude Sonnet | The `db` healthcheck used `pg_isready` over the Unix socket, so it reported healthy on the image's temporary init server. `docker compose up` from clean failed 1 of 15 full starts | The Director's control run, then the `db` log | `-h 127.0.0.1` forces TCP: 0 of 15 after |
+| Claude Sonnet | An undecodable JSON body answered `400 BAD_REQUEST`, outside the catalog. `/trips/%2F` said "No such route." while a malformed id said "Trip not found.". One constant was unused, and two comments overclaimed | Codex's review, reproduced on real uvicorn and Postgres | Fixed |
+| Codex | The same `pg_isready` mistake in `tests/app_support.py`: all 78 application tests errored in setup | The first real run. `qa-lead` found it independently | `-h 127.0.0.1`, and a 90 second deadline that also covers the image pull |
+| Codex | Walked `app.routes` as a flat list, but FastAPI 0.162 wraps included routers | The real run: `AttributeError` | `fastapi.routing.iter_route_contexts` |
+| Codex | Both 24-way concurrency tests passed with the requests running one after another, because the Python check answers before the guarded `UPDATE` | `qa-lead` | Test-installed triggers with `pg_sleep(0.3)` force the overlap. Mutations A19, A21, A22 and A25 die there |
+| Codex | The new echo check failed on `" 420.10"`, which matches the example in the application's own message | The real run | Test value changed |
+| Codex | Its first echo check could not see control characters, because `response.text` holds them escaped | `qa-lead` | Compares the JSON-escaped form too |
+| Codex | Mutation A05 died on a crash in the handler, not on the rule it named | `qa-lead` | Replaced by a mutation that adds a route with no protection |
+| Codex | As reviewer, proposed configuring integer decoding so a 4301-digit `version` reaches the comparison | The Director: Python's limit is a denial-of-service guard | Rejected, recorded under "Limits I accept" |
+
+**Tooling.** `TaskStop` reported success while six processes of the hung runs stayed alive. They were stopped by process id, after matching each one to the worktree path and launch time.
+
+**Debt ledger:** eight `ponytail:` comments. The six in `app/` are recorded under "Limits I accept" in `ARCHITECTURE.md`, and all six name their trigger. The two in `provider-mock/main.py` stay in `docs/STATUS.md`, Section 2.6.
 
 ### 2026-11-07: Ponytail
 

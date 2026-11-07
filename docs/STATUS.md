@@ -1,8 +1,8 @@
 # Project status and continuity plan
 
-As of commit `59cf671` on `main`, where CI passes.
+As of branch `claude/iteration-2-director-089f39`, on top of `7fcd2f3`. It has not been pushed, so CI has not run on it.
 
-**Where we stand:** Iteration 1 is merged. The provider mock runs from `docker compose up`, and CI proves its contract on every push. The architecture decision is closed in favor of the modular monolith, and the team roles and the Codex sandbox are set and tested. No application code exists yet. The next step is Iteration 2, the application core.
+**Where we stand:** Iteration 2 is built and verified on this machine, and committed on its branch. It has not been pushed, so CI is unproven. The API covers trips, participants, permissions and optimistic locking on Postgres, next to the provider mock. The next step is a push, a pull request and green CI. Iteration 3 comes after that.
 
 ---
 
@@ -18,10 +18,10 @@ As of commit `59cf671` on `main`, where CI passes.
 | Error handling per code | Done at contract level | `docs/CONTRACT_NOTES.md`, Section 3 |
 | Provider mock: storage, fixtures, test controls | Done | `provider-mock/README.md` |
 | CI and pull request rules | Done | `CLAUDE.md`, `.github/workflows/ci.yml` |
-| Team roles, Codex sandbox and contract barrier | Done and tested, except the subagents at runtime | `CLAUDE.md`, `AI-USAGE.md` |
+| Team roles, Codex sandbox and contract barrier | Done. Subagent models are confirmed by self-report only, and their effort is not visible | `CLAUDE.md`, `AI-USAGE.md` |
 | Ponytail (YAGNI) for Claude and Codex | Done | `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` |
 | Architecture decisions | Recorded. Modular monolith confirmed by the owner. | `CLAUDE.md`, `ARCHITECTURE.md` |
-| Application data model and API | Planned, not started | Section 2.4 |
+| Application data model and API | Done for trips and participants | `ARCHITECTURE.md`, and Section 2.8 of this file |
 | MCP tools and assistant | Not started, approach open (1.4, item 2) | |
 | Document generation | Not started | |
 | Deployment | Idea only (1.4, item 3) | |
@@ -35,16 +35,16 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Not started |
+| Backend | Partial: trips, participants, permissions and persistence, on its branch and not merged |
 | Frontend | Not started |
 | Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: contract tests for the mock, run by GitHub Actions on every push |
+| Tests and evaluations | Partial: contract tests for the mock, run by GitHub Actions on every push, and 82 application tests that CI has not run yet |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example` |
 | `AI-USAGE.md` | Started: harness and log |
-| `ARCHITECTURE.md` | Started: decisions, open proposals and limits |
+| `ARCHITECTURE.md` | Started: decisions, open proposals, guarantees and limits |
 | `README.md`, `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
 
-User stories implemented: 0 of 12. The mock is the foundation for US-03, US-07 and US-08.
+User stories implemented: 1 of 12, US-01, at API level with no interface yet. US-02 is partial: roles and permissions cover the trip and participant routes, and its planning, document, status and assistant permissions arrive with those features. The mock is the foundation for US-03, US-07 and US-08.
 
 ### 1.3 Decisions that carry the most weight
 
@@ -77,6 +77,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 7 | The Gemini CLI refuses this account with `IneligibleTierError`. Restoring it is optional, because nothing depends on Gemini. | Nothing |
 | 8 | The owner set `working_dir` to `C:/DEV/TravelPlanner`, and a test of the same command proves it keeps Codex out of `C:\DEV` and other projects. A fresh PAL loads it, but each session has its own PAL, cached at start. ⚠ Sessions already open keep `C:\DEV`: this one still wrote there after the owner's restart, which reached another session. `pal_qa` can still write, which `"role_args": ["-s", "read-only"]` would fix. Only the owner changes that file. | Other projects, while old sessions stay open |
 | 9 | The complete Codex review of `CONTRACT_NOTES.md` found no contradictions and three wording notes: line 106, line 182 and A44 (`AI-USAGE.md`). Rewording them is the owner's call, because those notes are accepted. | Nothing |
+| 10 | Iteration 2 is committed on its branch but not pushed, so CI has not run on it (2.8). | Iteration 3 |
+| 11 | `clink` in a fresh PAL stays unproven: the permission classifier denied the probe (`AI-USAGE.md`). Nothing depends on it, because `CLAUDE.md` forbids `clink` here. | Nothing |
 
 ### 1.5 Housekeeping
 
@@ -97,7 +99,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 4. Test a recommendation before accepting it, whether it comes from a person or from an AI.
 5. Close by updating this file, then commit only when the owner asks.
 6. Follow "CI and pull requests" in `CLAUDE.md`: every pull request is born with Auto-fix on, every CI failure is alerted and logged in 2.7, and every fix needs the owner's review and validation.
-7. Follow "Multi-model assistant protocol (PAL)" in `CLAUDE.md`: Codex runs from the CLI with `-s` and never through `clink`, whoever wrote a change does not review it, and mistakes go in `AI-USAGE.md`.
+7. Follow "Multi-model assistant protocol (PAL)" in `CLAUDE.md`: Codex runs from the CLI with `-s` and `< /dev/null`, never through `clink`, whoever wrote a change does not review it, and mistakes go in `AI-USAGE.md`.
 8. Apply Ponytail as `CLAUDE.md` limits it. Before closing an iteration, review `ponytail:` comments with `/ponytail-debt`.
 
 ### 2.2 Iterations
@@ -105,8 +107,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | # | Goal | Stories | Done when | State |
 |---|---|---|---|---|
 | 1 | Repository base and provider mock | Foundation for US-03, US-07, US-08 | `docker compose up` runs the mock, and contract tests pass against it | ✓ Merged (2.6) |
-| 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | Next |
-| 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | |
+| 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | Committed on its branch, waiting for a push and CI (2.8) |
+| 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | Next |
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | |
 | 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | |
@@ -117,74 +119,65 @@ The notes hold the detail. These are the ones an implementation most easily brea
 
 | Decision | Iteration |
 |---|---|
-| Migration tool and approach to schema changes | 2 |
-| Test identity mechanism | 2 |
-| Refusal codes, and who edits a trip | 2 |
-| Money at the API boundary | 2 |
+| Itinerary storage, and how its edits use `version` | 3 |
+| Provider client, timeouts and retries | 3 |
+| Schedule conflict rules | 3 |
 | Background work mechanism, without a message broker | 4 |
 | Document format, file storage, and file-to-record consistency | 5 |
 | MCP SDK and transport, LLM provider, deterministic mode (1.4, item 2) | 6 |
 | Deployment proposal (1.4, item 3) | 8 |
 
-### 2.4 Next: Iteration 2, application core
+### 2.4 Next: Iteration 3, provider client, search, itinerary and budget
+
+A plan, not started. It begins only after Iteration 2 is merged with green CI.
 
 **Scope**
 
-- `app/` in the layout of `CLAUDE.md`, with only the modules this iteration needs: `api`, `domain`, `services`, `db`, `money.py` and `config.py`.
-- Postgres and the application service in `docker-compose.yml`, next to the mock.
-- Test identities.
-- Trips (US-01): one or more destinations, dates and a USD budget. Create, list your own, read and edit.
-- Participants (US-02): the organizer adds, changes and removes viewers and editors. They are added by test identity, with no invitation flow.
-- Permission checks on every route.
-- Optimistic locking from the first write route, using the `version` column `CLAUDE.md` decided. A stale trip edit gets a 409 with the current state. Iteration 3 extends this to the itinerary.
-- `ARCHITECTURE.md`, extended with the application's first guarantees and limits.
-- CI and `tests/compose_smoke.py`, extended to the application and Postgres.
+- `app/providers/`: the HTTP client, bound to `contracts/openAPI.json`, parsing strictly (A45).
+- Search (US-03): one search per destination (A37). Complete, partial, empty and failed results stay distinct, a failed supplier does not lose the others, and results show their freshness.
+- Itinerary (US-04): editors add, remove and arrange selected options. An offer is stored as a JSONB snapshot, as `CLAUDE.md` decided. The application reports missing information, expired prices and schedule conflicts, and explains any simplified rule.
+- Budget (US-05): itemized costs, a total and a comparison, in USD. `ROUND_HALF_UP` lands in `app/money.py`.
+- Concurrent edits (US-06): the `version` check extends to the itinerary, and a stale edit gets a usable 409.
 
-**Out of scope:** the provider client, search, itinerary, bookings, documents, MCP, the frontend, and any change to the mock or the contract.
+**Out of scope:** bookings, documents, MCP, the frontend, and any change to the mock or the contract.
 
-**Decisions to settle first, with the recommended default**
+**Decisions to settle first**
 
-Already settled: the modular monolith (`ARCHITECTURE.md`).
+Each still needs a recommendation and a test.
 
-| # | Decision | Recommendation | Evidence so far |
-|---|---|---|---|
-| 1 | Migrations | Alembic with SQLAlchemy 2, applied by a one-shot `migrate` service in compose that the application waits for, so instances never race. Forward-only. | Not tested yet |
-| 2 | Test identities | Seeded users, each with a fixed bearer token. The token identifies the user, and no client-supplied user id is trusted. The same credential can later reach status subscriptions and MCP tools (US-02, US-12). | Not tested yet |
-| 3 | Refusals and roles | No or bad token: 401. Nonparticipant: 404, so a trip's existence never leaks, as the provider does (`:461`). Participant without the role: 403. Trip fields and participants belong to the organizer, because the PRD gives editors the itinerary, so editors and viewers behave alike until Iteration 3. One organizer per trip: the creator. | Tested: a permission dependency runs before schema and query validation. See the limit below. |
-| 4 | Money at the API | A `str` field with the contract's amount pattern, converted through `app/money.py`. Never a `Decimal` field. | Tested: `Decimal` accepts the JSON number `420.1` even with `strict=True`, accepts `"420.10\n"`, and emits `"420"` or `"1E+3"`. The pattern rejects all of them. |
+| # | Decision | Question |
+|---|---|---|
+| 1 | Provider client | Which HTTP client, and which timeouts? A43 needs the client timeout to exceed the whole search. |
+| 2 | Itinerary storage | How items are stored, and whether an item edit bumps the trip's `version` or has its own. |
+| 3 | Editor role | `app/api/deps.py` needs a third permission, because the PRD gives editors the itinerary. |
+| 4 | Schedule conflicts | Which overlaps count, given that no field gives a destination's time zone (A31). |
+| 5 | Estimates against confirmed prices | How a cost keeps that distinction before bookings exist, so Iteration 4 needs no migration of meaning. |
 
-⚠ **Limit to accept or fix:** FastAPI parses JSON before running dependencies, so a malformed body gets 422 before 401 or 404. Tested. It reveals nothing about a trip, so the recommendation is to record it under "Limits I accept" in `ARCHITECTURE.md`. Authenticating in middleware is the alternative, and it would only cover the 401.
-
-**Rules from `CONTRACT_NOTES.md` that reach this iteration**
-
-- A32: trim destinations, reject them if nothing is left, and keep the user's casing.
-- A36: refuse a past start date when trip dates are set, but not on other edits, so a trip under way stays editable. Compare against the UTC date minus one day.
-- A44: the amount limit of `NUMERIC(12,2)` applies to budgets too, so `9999999999.99` is the maximum. `0.00` is valid, and `Decimal("0.00")` is falsy.
+**Rules from `CONTRACT_NOTES.md` that reach this iteration:** A25, A28, A29, A31, A37, A43, A44 and A45.
 
 **The team in this iteration**
 
-- Director: Claude Code on Opus at high effort, which is the session itself.
-- First check: the subagents load with their model and effort, Codex answers through the read-only command, a fresh PAL starts `clink` in `C:\DEV\TravelPlanner`, and Ponytail is active. The first three have not been proven live yet (`AI-USAGE.md`). If one fails, report it before relying on it.
-- Dev: `dev-principal`. Large work may go to Codex with `workspace-write`, given `app/` and `tests/` only, so `contracts/` stays out of reach. `app/` must exist first, and `git diff` is reviewed afterwards.
-- QA: `qa-lead`. Whoever wrote a change does not review it, so run the read-only Codex review on Claude's code, covering the permission, money and `version` rules.
+The way of working from Iteration 2 held up (2.8), so it stays:
+
+- One brief, written by the Director, is the single spec for both authors.
+- Claude Sonnet builds the application. Codex writes the tests from the brief without reading `app/`.
+- Each reviews the other's artifact, and each author fixes its own findings.
+- The Director reproduces every finding before routing it, and runs everything Codex wrote, because its sandbox denies Python and Docker.
+- A claim that something can fail needs a control run that fails for the stated reason. An exit code alone proves nothing.
 
 **Tests that must exist, and must be able to fail**
 
-As in Iteration 1, they run over real HTTP with the application as a real process. They use real Postgres, because version checks, `NUMERIC` and constraints are what is under test, so SQLite cannot stand in.
+They run over real HTTP, with the mock and Postgres as real processes.
 
-1. A trip survives a hard kill of the application, and a replaced Postgres container through its volume.
-2. Invalid input returns an actionable error and saves nothing: no destination, a blank one, `endsOn` before `startsOn`, a past start date, and each bad budget of decision 4.
-3. A budget round-trips exactly: `420.10` and `0.00` come back as the same strings after a restart.
-4. A walk over `/openapi.json` proves every route refuses a missing token with 401 and a nonparticipant with 404. A new route is covered with no test edit, and only an explicit list of public routes is exempt. The walk sends `{}`, because a malformed body answers 422 first.
-5. A role matrix over every write route. Viewers and editors cannot edit the trip or manage participants.
-6. For a nonparticipant, an existing trip and a missing one give the same answer, apart from `requestId`.
-7. Creating a trip is atomic: a forced failure after the trip row leaves no trip, destinations or organizer.
-8. A stale `version` gets a 409 with the current state. Concurrent edits with the same `version` produce exactly one success.
-9. Concurrently adding the same participant creates one row and no 500.
-10. `alembic upgrade head` works on an empty database, and `alembic check` finds no drift between models and migrations.
-11. Every error body has the application's error shape, including validation errors and the malformed-body case.
+1. Every client response is parsed against the contract, and a schema-invalid `2xx` is refused.
+2. Complete, partial, empty and failed searches are told apart, and one failed supplier keeps the other results.
+3. Search results are never presented as confirmed prices.
+4. Itinerary changes survive a restart, and only editors and organizers make them.
+5. Expired prices, missing information and schedule conflicts are reported.
+6. Totals are reproducible, and rounding happens only in `app/money.py`.
+7. Concurrent itinerary edits with the same `version` produce exactly one success, and the loser gets the current state.
 
-**Done when:** all of the above pass, `tests/mutation_check.py` also covers the permission, money and `version` rules with every mutation killed, `docker compose up` works from clean, CI is green, and this file is updated.
+**Done when:** all of the above pass, `tests/mutation_check.py` covers the new rules with every mutation killed, `docker compose up` works from clean, CI is green, and this file is updated.
 
 ### 2.5 Starter prompt for the next iteration
 
@@ -192,17 +185,18 @@ Before pasting it, make sure this plan is on `main` and that the main checkout h
 
 ```text
 Read CLAUDE.md, ARCHITECTURE.md, docs/STATUS.md and docs/prd.md completely before
-writing anything. From docs/CONTRACT_NOTES.md, read Section 1.0 and the entries
-A32, A36 and A44.
+writing anything. From docs/CONTRACT_NOTES.md, read Sections 1.0 to 1.7, and the
+entries A25, A28, A29, A31, A37, A43, A44 and A45.
 
-We are starting Iteration 2 as defined in docs/STATUS.md, Section 2.4. You are the
+We are starting Iteration 3 as defined in docs/STATUS.md, Section 2.4. You are the
 Director.
 
-First, run the first check in Section 2.4 and report it. Then list the decisions in Section 2.4 with your
-recommendation, testing what has not been tested yet, and wait for my answers. Then
-implement only that scope, with the roles in CLAUDE.md. Every test must be able to fail.
+First, confirm that Iteration 2 is on main with green CI. Then list the decisions in
+Section 2.4 with your recommendation, testing what has not been tested yet, and wait
+for my answers. Then implement only that scope, with the roles in CLAUDE.md, and have
+Codex and Claude Sonnet review each other's artifacts. Every test must be able to fail.
 
-Do not start Iteration 3. When done, update docs/STATUS.md and show the test results.
+Do not start Iteration 4. When done, update docs/STATUS.md and show the test results.
 Do not commit until I ask.
 ```
 
@@ -277,3 +271,54 @@ Rule 6 of 2.1 applies. Newest first. A fix stays a proposal until the last colum
 | Date | Commit | Job | Cause | Fix | Validated by owner |
 |---|---|---|---|---|---|
 | | | | No failures so far | | |
+
+### 2.8 Iteration 2 record
+
+Built on branch `claude/iteration-2-director-089f39`. Not pushed yet.
+
+**What exists:** `app/` (`api`, `domain`, `services`, `db`, `money.py`, `config.py`, its Dockerfile and requirements), Postgres and the `migrate` and `app` services in `docker-compose.yml`, and `tests/test_app_*.py` with `tests/app_support.py`. `tests/compose_smoke.py` and `tests/mutation_check.py` now cover the application.
+
+**Decisions taken by the owner**
+
+The reasoning is in `ARCHITECTURE.md`.
+
+| Decision | Outcome |
+|---|---|
+| Migrations | Alembic, forward-only, through a one-shot `migrate` service, with `compare_server_default=True` and direct SQL tests for what `alembic check` misses |
+| Test identities | `token:user` pairs in `APP_TOKENS`, a dictionary lookup, and no `users` table |
+| Refusals and roles | 401, 404, 403, then 422. Organizer-only trip edits, an immutable organizer row, and a partial unique index |
+| Money and dates at the API | `str` with a pattern tighter than the contract's, and dates as `str` plus a pattern plus `date.fromisoformat` |
+| Malformed JSON before 401 or 404 | Accepted as a limit |
+
+**Required tests**
+
+| # | Required test | Where |
+|---|---|---|
+| 1 | A trip survives a hard kill and a replaced Postgres container | `tests/compose_smoke.py`, and `test_budget_round_trips_after_hard_restarts_and_patch` for the application process |
+| 2 | Invalid input returns an actionable error and saves nothing | `tests/test_app_validation.py` |
+| 3 | A budget round-trips exactly | `test_budget_round_trips_after_hard_restarts_and_patch` |
+| 4 | The `/openapi.json` walk refuses a missing token and a nonparticipant | `test_openapi_walk_enforces_auth_and_nonparticipant_hiding`, `test_no_runtime_route_can_hide_from_openapi` |
+| 5 | A role matrix over every write route | `test_every_organizer_write_refuses_viewers_and_editors_before_validation` |
+| 6 | A nonparticipant, a missing trip and a malformed id look the same | `test_nonparticipant_missing_and_malformed_trip_are_indistinguishable` |
+| 7 | Creating a trip is atomic | `test_create_trip_rolls_back_every_row_when_organizer_insert_fails` |
+| 8 | A stale `version` gets a 409, and concurrent edits have one winner | `tests/test_app_transactions.py`, 24 requests with forced overlap |
+| 9 | Concurrently adding a participant creates one row | `test_24_concurrent_adds_create_exactly_one_participant` |
+| 10 | Migrations apply on an empty database with no drift | `tests/test_app_database.py` |
+| 11 | Every error body has the error shape | `tests/test_app_errors.py`, and the client hook in `tests/app_support.py` |
+
+**Evidence**
+
+| Check | Result |
+|---|---|
+| `python -m pytest tests` | 316 passed, in about 70 seconds: 234 for the mock and 82 for the application |
+| Responses declared in the contract and exercised | 28 of 28 |
+| `python tests/mutation_check.py` | 107 of 107 mutations killed, in 36 minutes: 72 for the mock and 35 for the application. `python tests/mutation_check.py app` runs only the application's. |
+| Image built without cache, then `python tests/compose_smoke.py` | Passes |
+| `docker compose up` from clean, 15 full starts | 0 failed. It was 1 of 15 before the `db` healthcheck moved to TCP |
+| Control: the smoke with the database volume removed | Fails with `trip read answered 404, so the trip was lost`, which proves it can fail |
+| Control: a new route added to the organizer router | The `/openapi.json` walk passes, so the route inherits the router's protection. Mutation A05 removes that protection and dies |
+| Cross-review | Every artifact was reviewed by the assistant that did not write it (`AI-USAGE.md`) |
+| `contracts/openAPI.json` | SHA-256 unchanged: `9bf9b93e…` |
+| GitHub Actions | ⚠ Not run: nothing has been pushed. `.github/workflows/ci.yml` needs no change, because `pytest tests` and the smoke already reach the application. The tests have only run on Windows |
+
+**Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`.

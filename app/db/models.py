@@ -1,8 +1,8 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, Text, UniqueConstraint, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -50,8 +50,10 @@ class TripParticipant(Base):
 class ItineraryItem(Base):
     __tablename__ = "itinerary_items"
     # Deferrable, so a reorder can swap two positions inside one transaction. A plain UNIQUE fails the swap.
+    # uq_itinerary_offer: one item per offer in a trip (owner's O6). Offer ids are stable across revisions (CONTRACT_NOTES 1.7).
     __table_args__ = (
         UniqueConstraint("trip_id", "position", name="uq_itinerary_position", deferrable=True, initially="DEFERRED"),
+        Index("uq_itinerary_offer", "trip_id", text("(offer->>'id')"), unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -59,3 +61,36 @@ class ItineraryItem(Base):
     position: Mapped[int]
     # The provider's body as received (CONTRACT_NOTES 1.0, rule 4): never re-dumped from a model.
     offer: Mapped[dict] = mapped_column(JSONB)
+
+
+class BookingAttempt(Base):
+    """One user-confirmed attempt to book one item: one key, one reference, one stored request (CONTRACT_NOTES, Local terms)."""
+
+    __tablename__ = "booking_attempts"
+    __table_args__ = (
+        CheckConstraint("state IN ('unknown','pending','confirmed','failed','rejected')", name="ck_booking_attempts_state"),
+        UniqueConstraint("item_id", "attempt_no", name="uq_booking_attempt_number"),
+        # One open attempt per item, and none after `confirmed` (A12): only rejected or failed allows another.
+        Index("uq_one_open_attempt", "item_id", unique=True, postgresql_where=text("state NOT IN ('rejected','failed')")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    trip_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("trips.id"))
+    # RESTRICT, not CASCADE: deleting an item never silently erases a booking record. The delete rule (services/itinerary.py)
+    # removes only rejected and failed attempts first.
+    item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("itinerary_items.id", ondelete="RESTRICT"))
+    attempt_no: Mapped[int]
+    idempotency_key: Mapped[str] = mapped_column(Text, unique=True)
+    client_reference: Mapped[str] = mapped_column(Text, unique=True)
+    request: Mapped[dict] = mapped_column(JSONB)  # the exact CreateBookingRequest sent, and resent on retry
+    state: Mapped[str] = mapped_column(Text)
+    # none_as_null: Python None must be SQL NULL, not the JSON value null.
+    booking: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))  # the provider's Booking, raw (A26)
+    last_error: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    requested_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # ponytail: no index on next_check_at. The claim scans the table, and the open attempts are few. Add a partial index
+    # on state IN ('unknown','pending') when they are not.
+    next_check_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    check_count: Mapped[int] = mapped_column(server_default=text("0"))

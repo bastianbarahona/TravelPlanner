@@ -13,3 +13,9 @@ IDENTITIES = set(TOKENS.values())
 PROVIDER_BASE_URL = os.environ["PROVIDER_BASE_URL"]
 PROVIDER_TOKEN = os.environ["PROVIDER_TOKEN"]
 PROVIDER_TIMEOUT_SECONDS = float(os.environ.get("PROVIDER_TIMEOUT_SECONDS", "10"))
+
+# Reconciliation of unknown and pending bookings (CONTRACT_NOTES A15). Seconds before the 1st, 2nd, ... check; the last repeats.
+BOOKING_POLL_INTERVALS = [float(seconds) for seconds in os.environ.get("BOOKING_POLL_INTERVALS", "5,10,30,60").split(",")]
+if not all(0 < seconds < 86400 for seconds in BOOKING_POLL_INTERVALS):  # also refuses nan and inf
+    raise ValueError("BOOKING_POLL_INTERVALS must be seconds above 0 and below 86400, such as 5,10,30,60")
+BOOKING_POLL_ENABLED = os.environ.get("BOOKING_POLL_ENABLED", "1") != "0"  # 0: tests that must see the stored state untouched

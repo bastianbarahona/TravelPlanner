@@ -81,7 +81,12 @@ def db_engine(postgres):
 @pytest.fixture
 def empty_database(db_engine):
     with db_engine.begin() as connection:
-        connection.execute(text("TRUNCATE itinerary_items, trips, trip_destinations, trip_participants"))
+        connection.execute(
+            text(
+                "TRUNCATE booking_attempts, itinerary_items, trips, "
+                "trip_destinations, trip_participants"
+            )
+        )
     return db_engine
 
 
@@ -91,10 +96,11 @@ def application(postgres, mock):
         postgres.database_url,
         PROVIDER_BASE_URL=f"{mock.url}/v1",
         PROVIDER_TOKEN=TOKEN_A,
+        BOOKING_POLL_ENABLED="0",
     )
     process.start()
     yield process
-    process.kill()
+    process.close()
 
 
 @pytest.fixture
@@ -122,7 +128,7 @@ def start_app(postgres, mock, empty_database):
 
     yield start
     for process in started:
-        process.kill()
+        process.close()
 
 
 @pytest.fixture

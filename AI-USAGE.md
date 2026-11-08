@@ -19,6 +19,36 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-08: Iteration 4, bookings and reconciliation
+
+**Way of working:** one brief, `docs/iteration-4-brief.md`, was the spec for both authors. Claude Sonnet (`dev-principal`) built `app/`. Codex wrote `tests/` from the brief without reading `app/`, and stopped for a usage limit after its first file, so `qa-ux` took Codex's role at once, as `CLAUDE.md` requires, and wrote the rest of the tests and the mutation entries without reading `app/` before its tests existed. Codex came back at 00:48 and reviewed `app/` read-only. The Director probed the two untested decisions on real Postgres before the owner approved them, read `app/` line by line, and ran every suite, mutation and compose check.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | High, medium, low | Outcome |
+|---|---|---|---|---|
+| `app/`, first version | Claude Sonnet | `qa-ux`, in Codex's place | 1, 2, 7 | The High (attempt entities read after `rollback`, outside the snapshot, a 500 under a concurrent delete) confirmed by reading and fixed, with the two Mediums |
+| `app/`, after those fixes | Claude Sonnet | Codex, read-only | 1, 2, 1 | The High (a loser of the insert looped into attempt 2 when the winner closed at once) reproduced by a failing test, then fixed. The two Mediums (poll ignored `Retry-After`, retry accepted `null`) and the Low (A16, A42 logs) reproduced and fixed |
+| `tests/test_app_bookings.py` | Codex | Claude Sonnet (`qa-lead`) | 1, 7, 10, across all test files | All applied by `qa-ux`, holding Codex's role |
+| The other new test files | `qa-ux` | Claude Sonnet (`qa-lead`) | | `CLAUDE.md`'s one exception: `qa-ux` is a separate Claude instance in Codex's place |
+| Mutation entries A125 to A181 | `qa-ux` | Claude Sonnet (`qa-lead`) | 0, 2, 3 | Two probabilistic kills made deterministic, 12 entries added for rules left without one |
+| Documents of this iteration (`STATUS.md`, `AI-USAGE.md` by the Director; `ARCHITECTURE.md`, `README.md` by Sonnet) | Director, Claude Sonnet | Codex, read-only | 1, 4, 3 | All 8 accepted as wording: a stale draft table read as undecided, the 24 and 12 racers conflated, three guarantees wider than their tests, and compose variables the README overstated |
+| Recommendations for the 5 decisions | Director | Probes on real Postgres, each with a control | | Approved by the owner as recommended |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| Claude Sonnet | `itinerary_view` built attempt views after `session.rollback()`, which expires ORM entities: each attribute lazy-loaded in a new READ COMMITTED transaction, and a concurrent delete made it a 500 | `qa-ux`'s review, with a probe of the ORM behaviour | Views built before the rollback, in `itinerary_view` and `_open` |
+| Claude Sonnet | On a unique violation, `_open` looped. When the winner's POST had already closed as `failed` or `rejected`, the loser started attempt 2 and sent a second POST | Codex's review, then a failing test with a staged insert delay (two 201s) | The loser gets a 409 with the winner (`BOOKING_CONFLICT` when it closed). Mutation A181 restores the loop and dies |
+| Claude Sonnet | The poller ignored a 429's `Retry-After` (A40), and the retry route accepted a JSON `null` body | Codex's review, then failing tests | Both fixed and tested |
+| Codex | Hit its usage limit mid-run, after one test file | Its log, checked at once for `usage limit` | `qa-ux` took its role with no wait |
+| `qa-ux` | Its `uq_booking_attempt_number` test collided on `client_reference` too, so another constraint fired first | `qa-lead`'s review, reproduced by the Director (`1 failed`) | A distinct reference in the second insert |
+| `qa-ux` | Its first closed-winner race test counted a legitimate late click as a second winner: 24 racers outnumber the pool's 15 connections, so the last ones start after the winner closed | Sonnet's timing probe, then `qa-ux`'s own measurement | 12 racers and a staged delay, so every racer loses the insert. The late click is a limit in `ARCHITECTURE.md` |
+| Codex and `qa-ux` | Teardown left `application.log` held on Windows: the venv's `python.exe` is a launcher, and its child exits a moment after the kill | 45 errors in Sonnet's run of the suite, explained by the Director with a process probe | `TemporaryDirectory(ignore_cleanup_errors=True)` |
+| Director | The mutation runner ran every mapped file until it reached the killing test, about 370 s per mutation, or about 6 hours for 57 | Rule 10: a timed sample of 3 entries before the full run | A killing test node per entry, run first: 57 entries in 16 minutes |
+| Director | The brief's 24-racer concurrency case did not foresee a winner that closes at once, or the connection pool's limit on simultaneous opens | Codex's review and the race test above | `ARCHITECTURE.md`, "Limits I accept" |
+
 ### 2026-11-07: Iteration 3, cross-review
 
 **Way of working:** the same as Iteration 2. One brief from the Director was the spec for both authors, and it gained an addendum after the first run. Claude Sonnet built `app/`, and Codex wrote `tests/` from the brief without reading `app/`. The Director measured every recommendation before the owner approved it, and ran every local check of the iteration.

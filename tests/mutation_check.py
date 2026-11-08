@@ -210,10 +210,10 @@ APP_MUTATIONS = [
     ]),
     # Provider contract validation and transport guarantees.
     ("A36", "provider schemas are not validated", "providers/client.py", [
-        ("        validator.validate(body)\n", ""),
+        ("            validator.validate(body)\n", ""),
     ]),
     ("A37", "provider strings are not cleaned", "providers/client.py", [
-        ("        _clean(body)\n", ""),
+        ("            _clean(body)\n", ""),
     ]),
     ("A38", "offer amounts bypass parse_amount", "providers/client.py", [
         ('    parse_amount(offer["price"]["amount"])  # the schema\'s `$` lets "420.00\\n" through, and it has no upper bound\n', ""),
@@ -222,10 +222,10 @@ APP_MUTATIONS = [
         ("        parse_instant(offer[field])\n", "        str(offer[field])\n"),
     ]),
     ("A40", "an undeclared provider status is accepted", "providers/client.py", [
-        ('    if validator is None:\n        raise _invalid(f"undeclared status {response.status_code}")\n', '    if validator is None:\n        validator = Draft202012Validator({"type": "object"})\n'),
+        ('        if validator is None:\n            raise _invalid(f"undeclared status {response.status_code}", response.content)\n', '        if validator is None:\n            validator = Draft202012Validator({"type": "object"})\n'),
     ]),
     ("A41", "the whole-call asyncio timeout is removed", "providers/client.py", [
-        ("        async with asyncio.timeout_at(deadline):\n            response = await http.request(method, path, **request)\n", "        response = await http.request(method, path, **request)\n"),
+        ("            async with asyncio.timeout_at(deadline):\n                response = await http.request(method, path, **request)\n", "            response = await http.request(method, path, **request)\n"),
     ]),
     ("A42", "offer id is not percent-encoded", "providers/client.py", [
         ("path = f\"/offers/{quote(offer_id, safe='')}\"", 'path = f"/offers/{offer_id}"'),
@@ -274,14 +274,14 @@ APP_MUTATIONS = [
     ("A57", "add skips the Python version check before the provider call", "services/itinerary.py", [
         ("    await run_in_threadpool(_precheck, session, access, version)\n", ""),
     ]),
-    ("A58", "_item drops its concurrent version recheck", "services/itinerary.py", [
-        ("        if str(item_id) == text.lower():\n            _check_version(session, access, version)\n        raise not_found()\n", "        raise not_found()\n"),
+    ("A58", "find_item drops its concurrent version recheck", "services/itinerary.py", [
+        ("        if str(item_id) == text.lower() and version is not None:\n            _check_version(session, access, version)\n        raise not_found()\n", "        raise not_found()\n"),
     ]),
     ("A59", "reorder drops its concurrent version recheck", "services/itinerary.py", [
         ("        _check_version(session, access, version)  # the items may have changed after the first check: that is a 409\n", ""),
     ]),
     ("A60", "refresh bumps the version when the quote is unchanged", "services/itinerary.py", [
-        ('    if fresh != _item(session, access, version, str(item_id))[2]:\n', '    if True:\n'),
+        ('    if fresh != find_item(session, access, version, str(item_id))[2]:\n', '    if True:\n'),
     ]),
     # Itinerary issue and budget rules.
     ("A61", "overlap compares timestamp strings", "domain/itinerary.py", [
@@ -303,10 +303,10 @@ APP_MUTATIONS = [
         ('        if offer["travelers"] != trip["travelers"]:  # A22\n', '        if offer["travelers"] == trip["travelers"]:\n'),
     ]),
     ("A67", "PRICE_EXPIRED condition is inverted", "domain/itinerary.py", [
-        ('        if now >= parse_instant(item["offer"]["validUntil"]):\n', '        if now < parse_instant(item["offer"]["validUntil"]):\n'),
+        (' and now >= parse_instant(item["offer"]["validUntil"]):', ' and now < parse_instant(item["offer"]["validUntil"]):'),
     ]),
     ("A68", "UNAVAILABLE condition is inverted", "domain/itinerary.py", [
-        ('        if not item["offer"]["available"]:\n', '        if item["offer"]["available"]:\n'),
+        (' and not item["offer"]["available"]:', ' and item["offer"]["available"]:'),
     ]),
     ("A69", "OUTSIDE_TRIP_DATES condition is removed", "domain/itinerary.py", [
         ('        if parse_instant(offer["startsAt"]).date() < starts_on or parse_instant(offer["endsAt"]).date() > ends_on:\n', '        if False:\n'),
@@ -391,12 +391,259 @@ APP_MUTATIONS = [
     ("A94", "Retry-After accepts at most nine digits", "providers/client.py", [
         ('RETRY_AFTER = re.compile(r"[0-9]{1,4300}")', 'RETRY_AFTER = re.compile(r"[0-9]{1,9}")'),
     ]),
+    # Iteration 4: booking outcomes (docs/CONTRACT_NOTES.md 2.8), the monotonic rule and the one-open-attempt rule.
+    ("A125", "a retry of a 400 is rejected", "domain/booking.py", [
+        ('Outcome("rejected" if first else "unknown", None, refusal)', 'Outcome("rejected", None, refusal)'),
+    ]),
+    ("A126", "a booking POST answered 404 stays unknown", "domain/booking.py", [
+        ('        case 404:\n            return Outcome("rejected", None, refusal)\n', '        case 404:\n            return Outcome("unknown", None, refusal)\n'),
+    ]),
+    ("A127", "OFFER_UNAVAILABLE no longer rejects the attempt", "domain/booking.py", [
+        ('case 409 if body["code"] in ("OFFER_CHANGED", "OFFER_UNAVAILABLE"):', 'case 409 if body["code"] == "OFFER_CHANGED":'),
+    ]),
+    ("A128", "a 429 drops retryAfterSeconds", "domain/booking.py", [
+        ('            extra = {"retryAfterSeconds": retry_after} if retry_after is not None else {}\n', '            extra = {}\n'),
+    ]),
+    ("A129", "REFERENCE_CONFLICT terms match on either id or revision", "domain/booking.py", [
+        ('booking["offer"]["id"] == request["offerId"] and booking["offer"]["revision"]', 'booking["offer"]["id"] == request["offerId"] or booking["offer"]["revision"]'),
+    ]),
+    ("A130", "a pending answer may replace a terminal state", "domain/booking.py", [
+        ('    "pending": OPEN,\n', '    "pending": (*OPEN, "confirmed", "failed", "rejected"),\n'),
+    ]),
+    ("A131", "an adopted booking keeps the stale lastError", "services/booking.py", [
+        ('            values |= {"booking": outcome.booking, "last_error": None}\n', '            values |= {"booking": outcome.booking}\n'),
+    ]),
+    ("A132", "a pending attempt can be retried", "services/booking.py", [
+        ('    if latest is None or latest.state != "unknown":\n', '    if latest is None or latest.state not in ("unknown", "pending"):\n'),
+    ]),
+    ("A133", "an open attempt blocks a new one only when confirmed", "services/booking.py", [
+        ('    if latest is not None and latest.state not in CLOSED_WITHOUT_BOOKING:\n        raise _blocked(latest)\n', '    if latest is not None and latest.state == "confirmed":\n        raise _blocked(latest)\n'),
+    ]),
+    ("A134", "TERMS_CHANGED ignores the price", "services/booking.py", [
+        ('    if revision != offer["revision"] or price != offer["price"]["amount"]:\n', '    if revision != offer["revision"]:\n'),
+    ]),
+    ("A135", "TERMS_CHANGED ignores the revision", "services/booking.py", [
+        ('    if revision != offer["revision"] or price != offer["price"]["amount"]:\n', '    if price != offer["price"]["amount"]:\n'),
+    ]),
+    ("A136", "an unavailable snapshot is sent to the provider", "services/booking.py", [
+        ('    if not offer["available"]:  # the application\'s expired label does not block: the provider decides (A28)\n', '    if False:  # mutation\n'),
+    ]),
+    ("A137", "the attempt is flushed, not committed, before the POST", "services/booking.py", [
+        ('        session.commit()\n    except IntegrityError as error:\n', '        session.flush()\n    except IntegrityError as error:\n'),
+    ]),
+    ("A138", "a retry posts as a first attempt", "services/booking.py", [
+        ('await _post(False, key, request)', 'await _post(True, key, request)'),
+    ]),
+    ("A139", "a by-reference 404 rejects an open attempt", "services/booking.py", [
+        ('            outcome = adopt(reply.body)\n        retry_after = reply.retry_after', '            outcome = adopt(reply.body)\n        elif reply.status == 404:\n            outcome = Outcome("rejected", None, {"code": "NOT_FOUND", "message": "mutation"})\n        retry_after = reply.retry_after'),
+    ]),
+    ("A140", "an unreadable poll answer rejects an open attempt", "services/booking.py", [
+        ('        pass  # the call line says why\n', '        outcome = Outcome("rejected", None, {"code": "PROVIDER_UNREACHABLE", "message": "mutation"})\n'),
+    ]),
+    ("A141", "REFERENCE_CONFLICT adopts a booking for any terms", "services/booking.py", [
+        ('(code == "IDEMPOTENCY_CONFLICT" or same_terms(reply.body, request))', 'True'),
+    ]),
+    ("A142", "the poll interval is one step behind", "services/booking.py", [
+        ('[LEAST(check_count + 2, :n)]', '[LEAST(check_count + 1, :n)]'),
+    ]),
+    ("A143", "the first poll uses the last interval", "services/booking.py", [
+        ('timedelta(seconds=config.BOOKING_POLL_INTERVALS[0])', 'timedelta(seconds=config.BOOKING_POLL_INTERVALS[-1])'),
+    ]),
+    ("A144", "the poll sets no request id", "services/booking.py", [
+        ('    request_id.set(f"poll-{uuid4().hex}")  # this coroutine runs as its own task, so the id is its own\n', ''),
+    ]),
+    ("A145", "the poll claims only unknown attempts", "services/booking.py", [
+        ("WHERE state IN ('unknown', 'pending') AND next_check_at <= now()", "WHERE state IN ('unknown') AND next_check_at <= now()"),
+    ]),
+    ("A146", "a foreign key violation on the attempt insert is a 500", "services/booking.py", [
+        ('        if isinstance(error.orig, ForeignKeyViolation):  # the item was deleted under us\n            raise not_found() from None\n', ''),
+    ]),
+    ("A147", "a 400 from the provider is not logged as our bug", "services/booking.py", [
+        ('        logger.error("the provider refused our booking request as malformed, this is our bug: %s", request["clientReference"])\n', '        pass\n'),
+    ]),
+    ("A148", "an unresolved conflict is not logged", "services/booking.py", [
+        ('    logger.error("booking conflict %s on %s could not be reconciled", code, request["clientReference"])\n', ''),
+    ]),
+    ("A149", "booking logs no line with its reference and request id", "services/booking.py", [
+        ('    attempt_id, key, request = await run_in_threadpool(_open, session, access, text_id, revision, price)\n    logger.info("booking %s requestId=%s", request["clientReference"], request_id.get())\n', '    attempt_id, key, request = await run_in_threadpool(_open, session, access, text_id, revision, price)\n'),
+    ]),
+    ("A150", "retry logs no line with its reference and request id", "services/booking.py", [
+        ('    attempt_id, key, request = await run_in_threadpool(_retryable, session, access, text_id)\n    logger.info("booking %s requestId=%s", request["clientReference"], request_id.get())\n', '    attempt_id, key, request = await run_in_threadpool(_retryable, session, access, text_id)\n'),
+    ]),
+    ("A151", "the poll logs no reconciling line", "services/booking.py", [
+        ('    logger.info("reconciling %s requestId=%s", reference, request_id.get())\n', ''),
+    ]),
+    ("A152", "the reconciliation loop ignores BOOKING_POLL_ENABLED", "main.py", [
+        ('asyncio.create_task(booking.reconcile_forever()) if config.BOOKING_POLL_ENABLED else None', 'asyncio.create_task(booking.reconcile_forever())'),
+    ]),
+    ("A153", "an error body mints its own request id", "main.py", [
+        ('    identifier = request_id.get() or f"request-{uuid4().hex}"\n', '    identifier = f"request-{uuid4().hex}"\n'),
+    ]),
+    ("A154", "a booking for another clientReference is accepted", "providers/client.py", [
+        ('        if booking["clientReference"] != reference:\n            raise ValueError("clientReference is not ours")\n', ''),
+    ]),
+    ("A155", "a timeout is logged as unreachable", "providers/client.py", [
+        ('                outcome = "timeout"\n', '                outcome = "unreachable"\n'),
+    ]),
+    ("A156", "the provider request id is not logged", "providers/client.py", [
+        ('            provider_request_id = body["requestId"]\n', '            provider_request_id = "-"\n'),
+    ]),
+    ("A157", "a provider 401 is not logged for the operator", "providers/client.py", [
+        ('                logger.error("provider rejected our token requestId=%s", provider_request_id)\n', '                pass\n'),
+    ]),
+    ("A158", "removing an item deletes only its rejected attempts", "services/itinerary.py", [
+        ('BookingAttempt.item_id == item_id, BookingAttempt.state.in_(CLOSED_WITHOUT_BOOKING)', 'BookingAttempt.item_id == item_id, BookingAttempt.state == "rejected"'),
+    ]),
+    ("A159", "a foreign key violation on item delete is a 500", "services/itinerary.py", [
+        ('        if not isinstance(error.orig, ForeignKeyViolation):\n            raise\n', '        if True:\n            raise\n'),
+    ]),
+    ("A160", "the uq_itinerary_offer name check never matches", "services/itinerary.py", [
+        ('error.orig.diag.constraint_name == "uq_itinerary_offer"', 'error.orig.diag.constraint_name == "uq_itinerary_offer_mutation"'),
+    ]),
+    ("A161", "a confirmed item is priced from the snapshot", "domain/itinerary.py", [
+        ('        priced = item["booking"]["booking"]["offer"] if kind == "confirmed" else offer\n', '        priced = offer\n'),
+    ]),
+    ("A162", "a pending item is priced as confirmed", "domain/itinerary.py", [
+        ('return "confirmed" if item.get("booking", {}).get("state") == "confirmed" else "estimate"', 'return "confirmed" if item.get("booking", {}).get("state") in ("confirmed", "pending") else "estimate"'),
+    ]),
+    ("A163", "an open or confirmed item stays bookable", "domain/itinerary.py", [
+        ('item.get("booking", {}).get("state") in (*OPEN, "confirmed"):', 'item.get("booking", {}).get("state") in ():'),
+    ]),
+    ("A164", "a confirmed item raises PRICE_EXPIRED", "domain/itinerary.py", [
+        ('if price_kind(item) == "estimate" and now >= parse_instant(item["offer"]["validUntil"]):', 'if now >= parse_instant(item["offer"]["validUntil"]):'),
+    ]),
+    ("A165", "a confirmed item raises UNAVAILABLE", "domain/itinerary.py", [
+        ('if price_kind(item) == "estimate" and not item["offer"]["available"]:', 'if not item["offer"]["available"]:'),
+    ]),
+    ("A166", "booking_attempts cascades when an item is deleted", "db/migrations/versions/0003_booking_attempts.py", [
+        ("ondelete='RESTRICT'", "ondelete='CASCADE'"),
+    ]),
+    ("A167", "uq_one_open_attempt counts a failed attempt as open", "db/migrations/versions/0003_booking_attempts.py", [
+        ("state NOT IN ('rejected','failed')", "state NOT IN ('rejected')"),
+    ]),
+    ("A168", "the uq_itinerary_offer index is not created", "db/migrations/versions/0003_booking_attempts.py", [
+        ("""    op.create_index('uq_itinerary_offer', 'itinerary_items', ['trip_id', sa.text("(offer->>'id')")], unique=True)\n""", ''),
+    ]),
+    ("A169", "a 429 without a valid Retry-After keeps a null retryAfterSeconds", "domain/booking.py", [
+        ('{"retryAfterSeconds": retry_after} if retry_after is not None else {}', '{"retryAfterSeconds": retry_after}'),
+    ]),
+    ("A170", "a confirmed attempt answers BOOKING_IN_PROGRESS instead of ALREADY_BOOKED", "services/booking.py", [
+        ('    if attempt.state == "confirmed":\n', '    if False:\n'),
+    ]),
+    ("A171", "a new attempt reuses attempt number 1", "services/booking.py", [
+        ('    number = latest.attempt_no + 1 if latest else 1\n', '    number = 1\n'),
+    ]),
+    ("A172", "the attempt view shows a null booking", "domain/booking.py", [
+        ('    if attempt.booking is not None:\n', '    if True:\n'),
+    ]),
+    ("A173", "the attempt view shows a null lastError", "domain/booking.py", [
+        ('    if attempt.last_error is not None:\n', '    if True:\n'),
+    ]),
+    ("A174", "the attempt view shows a null lastCheckedAt", "domain/booking.py", [
+        ('    if attempt.last_checked_at is not None:\n', '    if True:\n'),
+    ]),
+    ("A175", "a failed booking without failure breaks the view", "domain/booking.py", [
+        ('attempt.booking.get("failure", {}).get("message", "The provider could not complete this booking.")', 'attempt.booking["failure"]["message"]'),
+    ]),
+    ("A176", "responses lose the X-Request-Id header", "main.py", [
+        ('                MutableHeaders(scope=message).setdefault("X-Request-Id", identifier)\n', '                pass\n'),
+    ]),
+    ("A177", "the booking POST drops its Idempotency-Key header", "providers/client.py", [
+        ('    headers = {"Content-Type": "application/json", "Idempotency-Key": key}\n', '    headers = {"Content-Type": "application/json"}\n'),
+    ]),
+    ("A178", "a provider booking's offer skips the amount and instant checks", "providers/client.py", [
+        ('        _check_offer(booking["offer"])\n', ''),
+    ]),
+    ("A179", "the uq_one_open_attempt index is not created", "db/migrations/versions/0003_booking_attempts.py", [
+        ("""    op.create_index('uq_one_open_attempt', 'booking_attempts', ['item_id'], unique=True, postgresql_where=sa.text("state NOT IN ('rejected','failed')"))\n""", ''),
+    ]),
+    ("A180", "the booking state CHECK is not created", "db/migrations/versions/0003_booking_attempts.py", [
+        ("""    sa.CheckConstraint("state IN ('unknown','pending','confirmed','failed','rejected')", name='ck_booking_attempts_state'),\n""", ''),
+    ]),
+    ("A181", "the loser of the insert starts attempt 2 behind a winner that already closed", "services/booking.py", [
+        ('        raise (_blocked(winner) if winner is not None else not_found()) from None\n',
+         '        if winner is not None and winner.state in CLOSED_WITHOUT_BOOKING:\n            return _open(session, access, text_id, revision, price)\n        raise (_blocked(winner) if winner is not None else not_found()) from None\n'),
+    ]),
 ]
+
+
+# The test written to catch each Iteration 4 mutation, by pytest node id under tests/. It runs first, alone: a kill costs one
+# test instead of every mapped file up to the killer. Optional: an entry without one, or whose test passes or no longer
+# exists, falls back to APP_TEST_MAP and then to the whole app suite, which is also where a FALSE KILL is still detected.
+APP_KILLERS = {
+    "A125": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[400-retry]",
+    "A126": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[404-first]",
+    "A127": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[409-offer-unavailable-first]",
+    "A128": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[429-first]",
+    "A129": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[reference-conflict-other-revision-first]",
+    "A130": "test_app_booking_recovery.py::test_late_pending_post_answer_never_undoes_a_confirmation_the_poller_stored",
+    "A131": "test_app_booking_views.py::test_last_error_is_cleared_when_a_retry_adopts_a_booking",
+    "A132": "test_app_bookings.py::test_retry_of_a_pending_attempt_is_nothing_to_retry_and_sends_no_post",
+    "A133": "test_app_booking_views.py::test_an_open_or_confirmed_attempt_is_refused_before_the_terms_are_compared[unknown]",
+    "A134": "test_app_bookings.py::test_changed_terms_and_unavailable_snapshot_make_no_provider_post",
+    "A135": "test_app_bookings.py::test_changed_terms_and_unavailable_snapshot_make_no_provider_post",
+    "A136": "test_app_bookings.py::test_changed_terms_and_unavailable_snapshot_make_no_provider_post",
+    "A137": "test_app_booking_recovery.py::test_crash_while_post_is_unanswered_keeps_unknown_and_retry_resends_same_key_and_body",
+    "A138": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[400-retry]",
+    "A139": "test_app_booking_recovery.py::test_reads_that_prove_nothing_never_change_an_unknown_attempt[404]",
+    "A140": "test_app_booking_recovery.py::test_reads_that_prove_nothing_never_change_an_unknown_attempt[non-json]",
+    "A141": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[reference-conflict-other-offer-first]",
+    "A142": "test_app_booking_recovery.py::test_poll_schedule_follows_the_configured_intervals",
+    "A143": "test_app_booking_recovery.py::test_poll_schedule_follows_the_configured_intervals",
+    "A144": "test_app_diagnostics.py::test_the_background_loop_logs_its_own_poll_request_id",
+    "A145": "test_app_booking_recovery.py::test_pending_booking_reaches_its_outcome_with_no_user_action[pending-to-confirmed]",
+    "A146": "test_app_booking_concurrency.py::test_item_deleted_while_the_attempt_insert_is_in_flight_makes_the_booking_a_404",
+    "A147": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[400-first]",
+    "A148": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[idempotency-conflict-missing-first]",
+    "A149": "test_app_diagnostics.py::test_the_background_loop_logs_its_own_poll_request_id",
+    "A150": "test_app_diagnostics.py::test_the_background_loop_logs_its_own_poll_request_id",
+    "A151": "test_app_diagnostics.py::test_the_background_loop_logs_its_own_poll_request_id",
+    "A152": "test_app_booking_recovery.py::test_disabled_poller_changes_nothing_and_the_same_setup_converges_when_enabled",
+    "A153": "test_app_diagnostics.py::test_a_provider_failure_on_add_logs_the_error_body_request_id_the_client_sees",
+    "A154": "test_app_booking_views.py::test_a_booking_that_breaks_the_contract_or_our_reference_leaves_the_attempt_unknown[wrong-reference]",
+    "A155": "test_app_diagnostics.py::test_each_provider_call_logs_exactly_one_line_with_both_request_ids[timeout]",
+    "A156": "test_app_diagnostics.py::test_each_provider_call_logs_exactly_one_line_with_both_request_ids[provider-error-with-its-request-id]",
+    "A157": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[401-first]",
+    "A158": "test_app_booking_concurrency.py::test_delete_is_refused_while_an_attempt_is_open_or_confirmed_and_allowed_once_closed[failed]",
+    "A159": "test_app_booking_concurrency.py::test_concurrent_delete_and_book_never_both_succeed_or_leave_an_orphan",
+    "A160": "test_app_bookings.py::test_same_offer_cannot_be_added_twice",
+    "A161": "test_app_bookings.py::test_confirmed_budget_uses_accepted_price_and_mixed_outcomes_remain_visible",
+    "A162": "test_app_booking_recovery.py::test_pending_booking_reaches_its_outcome_with_no_user_action[pending-to-confirmed]",
+    "A163": "test_app_booking_views.py::test_attempt_view_omits_instead_of_null_and_explains_the_next_step[unknown]",
+    "A164": "test_app_booking_views.py::test_a_confirmed_item_raises_no_expired_or_unavailable_issue_but_an_estimate_does",
+    "A165": "test_app_booking_views.py::test_a_confirmed_item_raises_no_expired_or_unavailable_issue_but_an_estimate_does",
+    "A166": "test_app_migration_0003.py::test_attempt_foreign_key_to_the_item_is_restrict_and_blocks_the_delete",
+    "A167": "test_app_migration_0003.py::test_uq_one_open_attempt_allows_a_new_attempt_after_rejected_or_failed[failed]",
+    "A168": "test_app_migration_0003.py::test_uq_itinerary_offer_refuses_the_same_offer_twice_in_one_trip_only",
+    "A169": "test_app_bookings.py::test_rate_limit_without_a_valid_retry_after_omits_retry_after_seconds[absent]",
+    "A170": "test_app_bookings.py::test_closed_attempt_controls_new_attempt_and_terminal_retry[confirmed]",
+    "A171": "test_app_bookings.py::test_closed_attempt_controls_new_attempt_and_terminal_retry[rejected]",
+    "A172": "test_app_booking_views.py::test_attempt_view_omits_instead_of_null_and_explains_the_next_step[unknown]",
+    "A173": "test_app_booking_views.py::test_attempt_view_omits_instead_of_null_and_explains_the_next_step[pending]",
+    "A174": "test_app_booking_views.py::test_attempt_view_omits_instead_of_null_and_explains_the_next_step[unknown]",
+    "A175": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[201-failed-without-failure-first]",
+    "A176": "test_app_diagnostics.py::test_every_success_carries_a_fresh_request_id_and_errors_echo_it",
+    "A177": "test_app_bookings.py::test_every_post_outcome_keeps_identity_and_expected_state[201-confirmed-retry]",
+    "A178": "test_app_booking_views.py::test_a_booking_that_breaks_the_contract_or_our_reference_leaves_the_attempt_unknown[newline-amount]",
+    "A179": "test_app_migration_0003.py::test_uq_one_open_attempt_refuses_a_second_attempt_while_one_is_open_or_confirmed[unknown]",
+    "A180": "test_app_migration_0003.py::test_attempt_state_check_refuses_an_unknown_state_and_accepts_the_five_real_ones",
+    "A181": "test_app_booking_concurrency.py::test_concurrent_bookings_never_post_twice_when_the_winner_closes_at_once[failed]",
+}
 
 
 APP_TEST_MAP = {
     "api/deps.py": ("test_app_permissions.py", "test_app_itinerary_permissions.py"),
-    "api/itinerary.py": ("test_app_itinerary_permissions.py",),
+    "api/itinerary.py": ("test_app_itinerary_permissions.py", "test_app_bookings.py"),
+    "context.py": ("test_app_diagnostics.py",),
+    "db/attempts.py": ("test_app_bookings.py", "test_app_booking_concurrency.py"),
+    "domain/booking.py": ("test_app_bookings.py", "test_app_booking_views.py", "test_app_booking_recovery.py"),
+    "services/booking.py": (
+        "test_app_bookings.py",
+        "test_app_booking_views.py",
+        "test_app_booking_recovery.py",
+        "test_app_booking_concurrency.py",
+        "test_app_diagnostics.py",
+    ),
     "api/participants.py": ("test_app_permissions.py",),
     "api/schemas.py": ("test_app_validation.py", "test_app_search_itinerary_validation.py"),
     "api/trips.py": ("test_app_permissions.py", "test_app_transactions.py"),
@@ -404,13 +651,14 @@ APP_TEST_MAP = {
         "test_app_database.py",
         "test_app_database_constraints.py",
     ),
+    "db/migrations/versions/0003_booking_attempts.py": ("test_app_migration_0003.py", "test_app_booking_concurrency.py"),
     "db/models.py": ("test_app_database.py", "test_app_database_constraints.py"),
-    "domain/itinerary.py": ("test_app_itinerary.py",),
+    "domain/itinerary.py": ("test_app_itinerary.py", "test_app_bookings.py", "test_app_booking_views.py"),
     "domain/rules.py": ("test_app_validation.py",),
-    "main.py": ("test_app_errors.py", "test_app_permissions.py"),
+    "main.py": ("test_app_errors.py", "test_app_permissions.py", "test_app_diagnostics.py", "test_app_booking_recovery.py"),
     "money.py": ("test_app_validation.py", "test_app_itinerary.py"),
-    "providers/client.py": ("test_app_provider.py",),
-    "services/itinerary.py": ("test_app_itinerary.py", "test_app_concurrency.py"),
+    "providers/client.py": ("test_app_provider.py", "test_app_bookings.py", "test_app_booking_views.py", "test_app_diagnostics.py"),
+    "services/itinerary.py": ("test_app_itinerary.py", "test_app_concurrency.py", "test_app_bookings.py", "test_app_booking_concurrency.py"),
     "services/participants.py": ("test_app_permissions.py", "test_app_transactions.py"),
     "services/search.py": (
         "test_app_provider.py",
@@ -455,9 +703,15 @@ def run(number, label, filename, replacements, suite="mock"):
         if suite == "app":
             all_tests = [str(path) for path in sorted((ROOT / "tests").glob("test_app_*.py"))]
             mapped_tests = [str(ROOT / "tests" / name) for name in APP_TEST_MAP.get(filename, ())]
-            result = pytest(mapped_tests or all_tests)
-            if mapped_tests and result.returncode == 0:
-                result = pytest(all_tests)
+            result = None
+            if number in APP_KILLERS:  # the one test written for this mutation, run alone and first
+                result = pytest([str(ROOT / "tests") + os.sep + APP_KILLERS[number]])
+                if not re.search(r"^FAILED tests[/\\]", result.stdout, re.MULTILINE):
+                    result = None  # it passed, or did not run (renamed, or an error): the mapped files decide, and judge a false kill
+            if result is None:
+                result = pytest(mapped_tests or all_tests)
+                if mapped_tests and result.returncode == 0:
+                    result = pytest(all_tests)
         else:
             result = pytest([str(ROOT / "tests"), "--ignore-glob=*test_app_*.py"])
     if result.returncode == 0:

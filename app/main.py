@@ -1,6 +1,8 @@
 """Travel planner API. Every error leaves as the provider's Error shape: {code, message, requestId}
 plus optional details. FastAPI's default {"detail": ...} bodies never appear."""
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 from http import HTTPStatus
 from uuid import uuid4
 
@@ -9,18 +11,35 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
 
+from app import config
 from app.api import itinerary, participants, search, trips
+from app.context import request_id
 from app.db.session import engine
 from app.domain.errors import ApiError, not_found
+from app.services import booking
 
 logger = logging.getLogger("uvicorn.error")
 BAD_JSON = "The request body is not valid JSON."
 
+
+@asynccontextmanager
+async def lifespan(_app):
+    """One reconciliation task per process (CONTRACT_NOTES 2.9). It only reads, and resumes from the database."""
+    task = asyncio.create_task(booking.reconcile_forever()) if config.BOOKING_POLL_ENABLED else None
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
 # docs_url and redoc_url off: they are routes outside the schema, and /openapi.json must list every route.
 # redirect_slashes off, as in the mock: a trailing slash must not become an undeclared 307.
-app = FastAPI(title="Travel Planner", docs_url=None, redoc_url=None, redirect_slashes=False)
+app = FastAPI(title="Travel Planner", docs_url=None, redoc_url=None, redirect_slashes=False, lifespan=lifespan)
 app.include_router(trips.collection)
 app.include_router(trips.readers)
 app.include_router(trips.organizers)
@@ -28,6 +47,29 @@ app.include_router(participants.router)
 app.include_router(itinerary.readers)
 app.include_router(itinerary.editors)
 app.include_router(search.router)
+
+
+class RequestIdMiddleware:
+    """Pure ASGI, so the id is set in the task that runs the route and its error handlers. Every response carries it."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        identifier = f"request-{uuid4().hex}"
+        request_id.set(identifier)
+
+        async def send_with_id(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message).setdefault("X-Request-Id", identifier)
+            await send(message)
+
+        await self.app(scope, receive, send_with_id)
+
+
+app.add_middleware(RequestIdMiddleware)
 
 
 @app.get("/health")
@@ -48,12 +90,13 @@ def ready():
 
 
 def error_response(status, code, message, details=None, headers=None):
-    request_id = f"request-{uuid4().hex}"
-    logger.warning("error status=%s code=%s requestId=%s", status, code, request_id)
-    body = {"code": code, "message": message, "requestId": request_id}
+    identifier = request_id.get() or f"request-{uuid4().hex}"
+    logger.warning("error status=%s code=%s requestId=%s", status, code, identifier)
+    body = {"code": code, "message": message, "requestId": identifier}
     if details is not None:
         body["details"] = details
-    return JSONResponse(body, status_code=status, headers=headers)
+    # The header is set here too: a 500 leaves through the server's outermost handler, past the middleware's send.
+    return JSONResponse(body, status_code=status, headers={**(headers or {}), "X-Request-Id": identifier})
 
 
 @app.exception_handler(ApiError)

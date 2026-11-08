@@ -48,6 +48,8 @@ Day = Annotated[str, _checked(parse_date)]
 Travelers = Annotated[int, Field(strict=True, ge=1, le=20)]
 # The contract allows 128 characters, counted as characters.
 ProviderText = Annotated[str, Field(min_length=1, max_length=128), AfterValidator(_encodable)]
+# The contract's expectedOfferRevision: 1 or more characters, no maximum.
+Revision = Annotated[str, Field(min_length=1), AfterValidator(_encodable)]
 Version = Annotated[int, BeforeValidator(_whole_number)]  # for a query string. A body uses Field(strict=True)
 Destinations = Annotated[list[Annotated[str, AfterValidator(clean_destination)]], Field(min_length=1)]
 
@@ -114,3 +116,12 @@ class Refresh(Body):
 class Reorder(Body):
     version: int = Field(strict=True)
     item_ids: list[str]
+
+
+class Book(Body):
+    expected_revision: Revision
+    expected_price_usd: Amount
+
+
+class Retry(Body):
+    """No fields: the stored key and request are resent as they were."""

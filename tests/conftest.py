@@ -81,9 +81,12 @@ def db_engine(postgres):
 @pytest.fixture
 def empty_database(db_engine):
     with db_engine.begin() as connection:
-        # documents references trips, so it must be in this same statement
+        # documents and booking_attempts reference trips and itinerary_items: every table, one statement
         connection.execute(
-            text("TRUNCATE documents, itinerary_items, trips, trip_destinations, trip_participants")
+            text(
+                "TRUNCATE documents, booking_attempts, itinerary_items, trips, "
+                "trip_destinations, trip_participants"
+            )
         )
     return db_engine
 
@@ -94,13 +97,14 @@ def application(postgres, mock):
         postgres.database_url,
         PROVIDER_BASE_URL=f"{mock.url}/v1",
         PROVIDER_TOKEN=TOKEN_A,
-        # The session app outlives tests: a live document worker here would claim the documents of
-        # tests that need a stopped, slowed or killed worker. Those tests start their own app.
+        # The session app outlives tests: a live document worker or booking poller here would claim the
+        # documents and attempts of tests that need them stopped, slowed or killed. Those tests start their own app.
         DOCUMENT_WORKER_ENABLED="0",
+        BOOKING_POLL_ENABLED="0",
     )
     process.start()
     yield process
-    process.kill()
+    process.close()
 
 
 @pytest.fixture
@@ -128,7 +132,7 @@ def start_app(postgres, mock, empty_database):
 
     yield start
     for process in started:
-        process.kill()
+        process.close()
 
 
 @pytest.fixture

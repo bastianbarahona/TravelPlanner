@@ -29,6 +29,7 @@ from app_support import (
     stub_offer,
     stub_search_result,
 )
+from booking_support import add_item, book_item, get_booking, get_itinerary, latest_attempt, wait_until
 
 ABSENT_WHEN_NOT_COMPLETE = {"completedAt", "sha256", "sizeBytes"}
 INSERT_DOCUMENT = (
@@ -289,6 +290,90 @@ def test_content_has_every_required_text_and_escapes_user_and_provider_text(star
     assert source_sha256 == hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def test_a_confirmed_booking_shows_its_state_and_accepted_price_and_stores_only_state_and_reference(
+    start_app, db_engine, control
+):
+    """US-05, US-09 (merge): a confirmed item is charged and shown at the accepted price, never the snapshot;
+    its source keeps {state, clientReference} and no per-poll attempt field."""
+    process = start_app()
+    with make_app_client(process.url) as client:
+        trip = create_planning_trip(client)
+        _, item = add_item(client, trip["id"], 1, "offer-hotel-001")
+        assert book_item(client, trip["id"], item).status_code == 201
+        attempt = wait_until(
+            lambda: (v := get_booking(client, trip["id"], item["id"]).json())["state"] == "confirmed" and v,
+            "the booking to be confirmed",
+        )
+        accepted = attempt["booking"]["offer"]["price"]["amount"]
+        reference = attempt["clientReference"]
+        assert reference == latest_attempt(db_engine, item["id"])["client_reference"]
+
+        # Make the snapshot disagree with the accepted price, so only the right source of the price can pass.
+        control.change_offer("offer-hotel-001", price={"amount": "777.00", "currency": "USD"})
+        version = get_itinerary(client, trip["id"])["version"]
+        refreshed = client.post(
+            f"/trips/{trip['id']}/itinerary/items/{item['id']}/refresh", json={"version": version}
+        )
+        assert refreshed.status_code == 200, refreshed.text
+        assert refreshed.json()["items"][0]["offer"]["price"]["amount"] == "777.00" != accepted
+
+        view = complete_document(client, trip["id"])
+        page = download(client, trip["id"], view["id"]).content.decode("utf-8")
+    title = html.escape(item["offer"]["title"], quote=True)
+    line = page[page.index(title) : page.index("Estimated ")]  # this item's lines, up to the budget
+    assert "Booking: confirmed" in line and "Booking: not requested" not in page
+    assert re.search(r"price ?kind[: ]+confirmed", line.lower()), line
+    assert f"{accepted} USD" in line
+    assert "777.00" not in page
+    for label in ("Confirmed", "Total"):
+        assert f"{label} {accepted} USD" in page
+    assert "Estimated 0.00 USD" in page
+
+    with db_engine.connect() as connection:
+        source = connection.scalar(
+            text("SELECT source FROM documents WHERE id = CAST(:id AS uuid)"), {"id": view["id"]}
+        )
+    (stored,) = source["items"]
+    assert set(stored) == {"id", "position", "offer", "priceKind", "booking"}
+    assert stored["priceKind"] == "confirmed"
+    assert stored["booking"] == {"state": "confirmed", "clientReference": reference}
+    assert stored["offer"]["price"]["amount"] == "777.00"  # the snapshot is kept raw; the budget carries the charge
+    assert source["budget"]["confirmedUsd"] == accepted
+
+
+def test_two_requests_either_side_of_a_poll_return_the_same_document(start_app, start_mock, db_engine):
+    """US-09 (merge): the source holds no poll-time field, so a poll between two requests does not make a new document."""
+    private = start_mock(MOCK_PENDING_DELAY_SECONDS="120")  # offer-hotel-002 stays pending while the poller reads it
+    process = start_app(PROVIDER_BASE_URL=f"{private.url}/v1", BOOKING_POLL_INTERVALS="0.2,0.2,0.5")
+    with make_app_client(process.url) as client:
+        trip = create_planning_trip(client)
+        _, item = add_item(client, trip["id"], 1, "offer-hotel-002")
+        booked = book_item(client, trip["id"], item)
+        assert booked.status_code == 201 and booked.json()["state"] == "pending"
+
+        def checked_at():
+            return latest_attempt(db_engine, item["id"])["last_checked_at"]
+
+        wait_until(checked_at, "the first poll of the pending booking", timeout=20)
+        first = request_document(client, trip["id"])
+        assert first.status_code == 202, first.text
+        before = checked_at()
+        wait_until(lambda: checked_at() > before, "another poll after the first document request", timeout=20)
+        second = request_document(client, trip["id"])
+        assert second.status_code == 200, second.text
+        assert second.json()["id"] == first.json()["id"]
+        assert second.json()["tripVersion"] == first.json()["tripVersion"]
+        assert latest_attempt(db_engine, item["id"])["state"] == "pending"  # still being polled, so the poll was real
+        with db_engine.connect() as connection:
+            rows = connection.execute(
+                text("SELECT source FROM documents WHERE trip_id = CAST(:id AS uuid)"), {"id": trip["id"]}
+            ).all()
+    assert len(rows) == 1
+    (stored,) = rows[0].source["items"]
+    assert stored["booking"] == {"state": "pending", "clientReference": booked.json()["clientReference"]}
+    assert "lastCheckedAt" not in json.dumps(rows[0].source)
+
+
 # --- 3 and 4: point in time and repeated requests ----------------------------------------------
 
 
@@ -429,11 +514,12 @@ def test_the_source_pairs_a_version_with_its_own_items_when_an_edit_commits_mid_
 
             connection.execute(
                 text(
+                    # A copy of an offer already in the trip, under a fresh id: uq_itinerary_offer refuses a duplicate.
                     "INSERT INTO itinerary_items (id, trip_id, position, offer) "
-                    "SELECT :new_id, trip_id, 2, offer FROM itinerary_items WHERE trip_id = CAST(:trip_id AS uuid) "
-                    "AND position = 0"
+                    "SELECT :new_id, trip_id, 2, jsonb_set(offer, '{id}', to_jsonb(CAST(:offer_id AS text))) "
+                    "FROM itinerary_items WHERE trip_id = CAST(:trip_id AS uuid) AND position = 0"
                 ),
-                {"new_id": uuid4(), "trip_id": trip["id"]},
+                {"new_id": uuid4(), "offer_id": f"edit-{uuid4().hex}", "trip_id": trip["id"]},
             )
             connection.execute(
                 text("UPDATE trips SET version = version + 1 WHERE id = CAST(:trip_id AS uuid)"),

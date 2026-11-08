@@ -42,16 +42,15 @@ def test_itinerary_position_unique_constraint_is_deferred_and_checked_at_commit(
 
     trip_id = uuid4()
     insert_trip(empty_database, trip_id)
-    offer = json.dumps(stub_offer())
     with pytest.raises(IntegrityError) as caught:
         with empty_database.begin() as connection:
-            for _ in range(2):
+            for index in range(2):
                 connection.execute(
                     text(
                         "INSERT INTO itinerary_items (id, trip_id, position, offer) "
                         "VALUES (:id, :trip_id, 0, CAST(:offer AS jsonb))"
                     ),
-                    {"id": uuid4(), "trip_id": trip_id, "offer": offer},
+                    {"id": uuid4(), "trip_id": trip_id, "offer": json.dumps(stub_offer(f"offer-{index}"))},
                 )
     assert caught.value.orig.diag.constraint_name == "uq_itinerary_position"
 

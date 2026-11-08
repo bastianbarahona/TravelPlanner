@@ -69,30 +69,22 @@ def view(row):
     return result
 
 
-def booking_states(session, item_ids):
-    """The booking state of each item, as {item id: {"state", "clientReference"}}. Items with none are absent.
-
-    Called inside the source snapshot. Iteration 4's merge replaces this stub with the latest `booking_attempts` row
-    per item, read in the same snapshot.
-    """
-    return {}
-
-
 def capture_source(session, caller, trip_id):
     """The trip, its items and their booking states from one REPEATABLE READ snapshot. Nothing here depends on the
     clock or on the caller, so two users requesting the same trip state get the same source."""
     begin_snapshot(session)
     try:
         trip = get_trip(session, caller, trip_id)
-        items = read_items(session, trip_id)
-        states = booking_states(session, [item["id"] for item in items])
+        items = read_items(session, trip_id)  # each item carries its latest attempt's full view, built before the rollback
     finally:
         session.rollback()
+    # priceKind and the budget need the full view: a confirmed item is charged the price in its booking (US-05).
     source_items = []
     for item in items:
-        entry = {**item, "priceKind": price_kind(item["offer"])}
-        if item["id"] in states:
-            entry["booking"] = states[item["id"]]
+        entry = {"id": item["id"], "position": item["position"], "offer": item["offer"], "priceKind": price_kind(item)}
+        if "booking" in item:
+            # Only these two. The view's lastCheckedAt, nextStep and checks change on every poll and would change the hash.
+            entry["booking"] = {"state": item["booking"]["state"], "clientReference": item["booking"]["clientReference"]}
         source_items.append(entry)
     keys = ("id", "destinations", "startsOn", "endsOn", "budgetUsd", "travelers", "version")
     return {"trip": {key: trip[key] for key in keys}, "items": source_items, "budget": budget(trip, items)}
@@ -199,6 +191,7 @@ def _e(value):
 def render(document):
     source = document["source"]
     trip, items, totals = source["trip"], source["items"], source["budget"]
+    amounts = {line["itemId"]: line["amountUsd"] for line in totals["lines"]}  # what the budget charges: the accepted price once confirmed
     parts = [
         '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">',
         f"<title>Trip document {_e(document['id'])}</title></head><body>",
@@ -217,7 +210,7 @@ def render(document):
             f"<li><h3>{_e(offer['title'])}</h3>",
             f"<p>Category: {_e(offer['category'])}</p>",
             f"<p>Starts at {_e(offer['startsAt'])}</p><p>Ends at {_e(offer['endsAt'])}</p>",
-            f"<p>{_e(offer['price']['amount'])} USD</p><p>Price kind: {_e(item['priceKind'])}</p>",
+            f"<p>{_e(amounts[item['id']])} USD</p><p>Price kind: {_e(item['priceKind'])}</p>",
             f"<p>Booking: {_e(booking['state']) if booking else 'not requested'}</p>",
             f"<p>Reference: {_e(booking['clientReference'])}</p></li>" if booking else "</li>",
         ]

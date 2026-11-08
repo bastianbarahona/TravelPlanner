@@ -1,7 +1,7 @@
 """documents
 
 Revision ID: 0004
-Revises: 0002
+Revises: 0003
 Create Date: 2026-11-07
 
 Forward-only: there is no downgrade.
@@ -12,8 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = '0004'
-# Iteration 4's 0003 merges first: set this to "0003" at the merge.
-down_revision = '0002'
+down_revision = '0003'
 branch_labels = None
 depends_on = None
 

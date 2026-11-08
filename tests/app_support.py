@@ -5,6 +5,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -119,10 +120,16 @@ class AppProcess:
             **env,
         }
         self.process = None
+        self._log_directory = tempfile.TemporaryDirectory(
+            prefix="travelplanner-app-", ignore_cleanup_errors=True
+        )
+        self.log_path = Path(self._log_directory.name) / "application.log"
+        self._log_stream = None
 
     def start(self):
         port = free_port()
         self.url = f"http://127.0.0.1:{port}"
+        self._log_stream = self.log_path.open("ab", buffering=0)
         self.process = subprocess.Popen(
             [
                 sys.executable,
@@ -135,8 +142,8 @@ class AppProcess:
                 str(port),
             ],
             env=self.env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self._log_stream,
+            stderr=subprocess.STDOUT,
         )
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -165,6 +172,16 @@ class AppProcess:
             self.process.kill()
             self.process.wait()
             self.process = None
+        if self._log_stream:
+            self._log_stream.close()
+            self._log_stream = None
+
+    def read_logs(self):
+        return self.log_path.read_text(encoding="utf-8", errors="replace")
+
+    def close(self):
+        self.kill()
+        self._log_directory.cleanup()
 
 
 def check_app_response(response):
@@ -283,12 +300,12 @@ def provider_error(code="PROVIDER_UNAVAILABLE"):
     return {"code": code, "message": "The stub refused the request.", "requestId": "stub-request-1"}
 
 
-def install_delay_trigger(db_engine, name, event, table):
+def install_delay_trigger(db_engine, name, event, table, seconds=0.3):
     with db_engine.begin() as connection:
         connection.execute(
             text(
                 f"CREATE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql "
-                "AS $$ BEGIN PERFORM pg_sleep(0.3); RETURN NEW; END $$"
+                f"AS $$ BEGIN PERFORM pg_sleep({seconds}); RETURN NEW; END $$"
             )
         )
         connection.execute(
@@ -330,6 +347,7 @@ class StubResponse:
     headers: dict = field(default_factory=dict)
     chunks: list[bytes] | None = None
     delay: float = 0.0
+    disconnect: bool = False
 
 
 class ProviderStub:
@@ -363,6 +381,7 @@ class ProviderStub:
                     "path": self.path,
                     "headers": {key.lower(): value for key, value in self.headers.items()},
                     "body": body,
+                    "raw_body": raw,
                 }
                 with owner.condition:
                     owner.requests.append(request)
@@ -373,6 +392,9 @@ class ProviderStub:
                     with owner.condition:
                         owner.exceptions.append(error)
                         owner.condition.notify_all()
+                    self.close_connection = True
+                    return
+                if reply.disconnect:
                     self.close_connection = True
                     return
                 if reply.chunks is not None:

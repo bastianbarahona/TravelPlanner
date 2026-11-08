@@ -280,8 +280,9 @@ def test_provider_wait_holds_no_database_transaction(start_app, control, db_engi
         return StubResponse(200, stub_offer(request["path"].rsplit("/", 1)[1]))
 
     with ProviderStub(respond) as stub:
-        # The document worker's own claims would show up in pg_stat_activity; this test is about the request path.
-        process = start_app(PROVIDER_BASE_URL=stub.url, DOCUMENT_WORKER_ENABLED="0")
+        # The document worker's and the booking poller's own claims would show up in pg_stat_activity; this test
+        # is about the request path.
+        process = start_app(PROVIDER_BASE_URL=stub.url, DOCUMENT_WORKER_ENABLED="0", BOOKING_POLL_ENABLED="0")
         with make_app_client(process.url) as client, ThreadPoolExecutor(1) as pool:
             trip = create_planning_trip(client)
             if workflow == "search":

@@ -1,6 +1,6 @@
 # Iteration 5 brief: documents
 
-**As built** (2026-11-08): implemented as written, with 13 tests and 30 killed mutations. The record, the departures (`nextStep` wording, HTML layout beyond the required texts) and the merge steps with Iteration 4 are in `docs/STATUS.md` 2.11. Codex was on a usage limit, so `qa-ux` wrote the tests.
+**As built** (2026-11-08): implemented as written, with 13 tests and 30 killed mutations. The record, the departures (`nextStep` wording, HTML layout beyond the required texts) and the merge steps with Iteration 4 are in `docs/STATUS.md` 2.12. Codex was on a usage limit, so `qa-ux` wrote the tests.
 
 The single spec for both authors. Written by the Director on 2026-11-07 (UTC-3), from `docs/STATUS.md` 2.10, with the five decisions the owner approved that day. If this brief and `CLAUDE.md` disagree, `CLAUDE.md` wins: stop and report.
 

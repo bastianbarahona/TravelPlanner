@@ -51,9 +51,15 @@ def trip_member(tripId: str, user: str = Depends(current_user), session=Depends(
 
 
 def trip_organizer(access: Access = Depends(trip_member)):
-    # Editors and viewers behave alike in this iteration: both read, neither writes.
+    # Trip fields and participants belong to the organizer alone. Editors change the itinerary (trip_editor).
     if access.role != "organizer":
         raise ApiError(403, "FORBIDDEN", "Only the trip organizer can do this.")
+    return access
+
+
+def trip_editor(access: Access = Depends(trip_member)):
+    if access.role not in ("organizer", "editor"):
+        raise ApiError(403, "FORBIDDEN", "Only the trip organizer or an editor can do this.")
     return access
 
 

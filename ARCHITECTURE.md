@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock and the application core exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary and the budget exist. Anything here about a later iteration is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -50,9 +50,70 @@ The table of decisions in `CLAUDE.md` is the short version. This file holds the 
 
 ### Refusals and roles
 
-**Decision:** every protected route refuses in the same order, once its body has been decoded: 401 for a missing or bad token, 404 for a nonparticipant, a missing trip or a malformed id, 403 for a participant without the role, then 422. Trip fields and participants belong to the organizer, who is the creator. Viewers and editors behave alike until Iteration 3 gives editors the itinerary.
+**Decision:** every protected route refuses in the same order, once its body has been decoded: 401 for a missing or bad token, 404 for a nonparticipant, a missing trip or a malformed id, 403 for a participant without the role, then 422. Trip fields and participants belong to the organizer, who is the creator. The itinerary belongs to editors and the organizer (`trip_editor`). Every participant reads the trip and its itinerary, and searches.
 
 **Why:** the 404 hides whether a trip exists, as the provider does. Dependencies sit on the routers, so a new route cannot forget them. A walk over `/openapi.json` covers a new route with no test edit.
+
+### Provider client
+
+**Decision:** one `httpx.AsyncClient` in `app/providers/client.py`. Only the routes that call the provider are `async`, and no database transaction stays open while they wait: each service that calls the provider rolls back its earlier reads first, and database work after the call runs in the thread pool.
+
+**Why, measured:** with the provider holding 60 searches for 3 seconds, the four combinations took this long, against 3.1 s for the same load sent straight to the mock.
+
+| Route | Session during the call | All 60 searches | `/health`, slowest |
+|---|---|---|---|
+| sync | held | 15.4 s | 2.97 s |
+| sync | released | 6.4 s | 2.89 s |
+| async | held | 12.6 s | 3.06 s |
+| async | released | 3.7 s | 0.12 s |
+
+The compose healthcheck times out at 3 seconds, so every other combination risked flapping it.
+
+**Timeouts (A43):** `PROVIDER_TIMEOUT_SECONDS`, 10 by default, with a 2 second connect. httpx's timeout bounds each read, not the response, so a body dripping one byte at a time ran 3.8 s past a 1 s timeout. `asyncio.timeout` around every call bounds the whole response. httpx's 5 second default equals the mock's supplier deadline, and with it a partial search arrived as a timeout.
+
+**Retries:** a search is never retried, so a failed leg reaches the user at once (A35). `getOffer` makes at most two attempts, and only after a 429 or a 503: it waits `Retry-After`, or 5 s when that header is absent or invalid, and 2 to 3 s after a 503. A wait above 5 s is reported to the user, never slept and never shortened (A40). One deadline of `PROVIDER_TIMEOUT_SECONDS` covers both attempts and the wait (owner's O7), so no request waits on the provider longer than that.
+
+**Parsing (A45):** responses are validated at runtime against `contracts/openAPI.json` itself, as the mock validates requests, so there is no second copy of the schemas, and each operation's declared statuses also come from the contract. Three checks sit on top, because the schema cannot express them:
+
+- Amounts go through `app/money.py` (A44). The contract's `$` also lets `"420.00\n"` through.
+- Instants go through `parse_instant`. Lowercase `t` and `z` are contract-valid, and `fromisoformat` refuses them.
+- No string, key or value, may hold a NUL or a lone surrogate. jsonb refuses the first, and a response cannot encode the second.
+
+Tested on 24 invalid offers: the schema with formats rejected 22, and the two it let through are the newline, which `parse_amount` closes, and `2.0` for an integer, which JSON Schema allows. A hand-written strict Pydantic model rejected 24, but it accepted a comma in a fraction of a second, which the contract refuses, and it would be a second copy of the schemas. The raw decoded body is what the application keeps (`docs/CONTRACT_NOTES.md`, 1.0 rule 4).
+
+**Paths:** an offer id is percent-encoded with `quote(offer_id, safe="")`. Sent as it came, `offer-hotel-001/../offer-hotel-002` returned another offer.
+
+### Search
+
+**Decision:** `POST /trips/{tripId}/search` sends one provider request per destination (A37), concurrently, and answers one leg per destination. A leg is `complete`, `partial`, `empty` or `failed`, and a failure in one leg never loses the others. `travelers` always comes from the trip, and dates and destinations default to the trip's. Nothing is cached or stored: every search is live, and `searchedAt` is the provider's.
+
+### Itinerary and its version
+
+**Decision:** `itinerary_items` holds `position` and the provider's offer as JSONB, exactly as `GET /offers/{offerId}` returned it. The client sends only an `offerId`, so a price can never come from the client. Every itinerary write that changes state bumps `trips.version` through the same guarded `UPDATE` that `PATCH /trips` uses, and there is no second version.
+
+**Why one version:** one number then names one state of the trip's planning data, its fields and its itinerary, which is what a document must cite in Iteration 5 (US-10). Participants are outside it, as "Limits I accept" says. The cost: an organizer's budget edit makes an editor's pending itinerary edit stale, and that edit gets a 409 with the current state.
+
+**How it is built:**
+
+- **Order of checks:** a write compares `version` in Python before calling the provider, so a stale request spends no provider call, and a huge integer never reaches the `UPDATE`.
+- **A refusal that depends on item state:** a 404 for a missing item, or a 422 for a wrong permutation, rechecks the version first, so a concurrent commit still answers 409.
+- **Positions:** `UNIQUE (trip_id, position)` is `DEFERRABLE INITIALLY DEFERRED`, because a plain unique constraint failed a two-item swap.
+- **Reads:** every view the API returns is read in one `REPEATABLE READ` transaction: trips, the trip list, the itinerary, and the `details.current` of every 409. So `version` always matches the destinations and items it is shown with. A torn read was reproduced under `READ COMMITTED` by holding a lock on `trip_destinations`.
+- **Refresh:** `POST .../items/{itemId}/refresh` replaces the snapshot only when the provider's body differs, and bumps `version` only then (A25).
+
+**Issues, computed at read time and never stored:** `MISSING_ORIGIN` (A30), `DESTINATION_WITHOUT_STAY`, `PARTY_MISMATCH` (A22), `PRICE_EXPIRED` (A28, the application's clock, a hint), `UNAVAILABLE`, `OUTSIDE_TRIP_DATES` (the literal local date, A31) and `SCHEDULE_OVERLAP`.
+
+**Schedule conflicts:** instants, half-open intervals, so touching is not an overlap. A pair conflicts when its categories are equal, or are transport and activity. An accommodation conflicts only with another accommodation, because travelers leave a hotel during a stay. On the fixtures' coherent Lisbon plan, a naive overlap reported two false conflicts, hotel against activities, and this rule reports none. `10:00+01:00` and `10:00Z` are different instants, although their clock reading is the same. The response explains every simplified rule in `rules`.
+
+### Party size
+
+**Decision:** `trips.travelers`, from 1 to 20, required on create and changed by the organizer. The provider requires a party on every search, and searching Lisbon for 3 travelers answered an empty result, which reads like "no options". The migration gives existing trips 1 traveler.
+
+### Estimates and confirmed prices
+
+**Decision:** `priceKind` is derived, not stored. One function returns `estimate` today, and Iteration 4 adds `confirmed` there for an item covered by a confirmed booking, whose accepted price will be `Booking.offer.price`. The budget reports `estimatedUsd`, `confirmedUsd` and their total, so the distinction needs no new meaning for any column.
+
+**Rounding:** totals are exact `Decimal` sums of two-decimal prices, so nothing rounds today. `format_amount` quantizes half up all the same. Before this iteration it formatted with `:.2f`, which rounds half even and turned `0.125` into `0.12`. A source scan fails on any other rounding primitive in `app/`.
 
 ## Proposals recorded, not adopted
 
@@ -80,7 +141,7 @@ Application, each proven over real HTTP against real Postgres:
 |---|---|
 | A trip survives a hard kill of the application, and a replaced Postgres container through its volume. | `tests/compose_smoke.py` |
 | A budget comes back as the exact string it went in as, including `0.00`, after restarts. | `tests/test_app_validation.py` |
-| With a decodable body, every route except `GET /health` and `GET /openapi.json` refuses a missing token with 401, and every `{tripId}` route refuses a nonparticipant with 404. A route cannot hide from that check. | `tests/test_app_permissions.py` |
+| With a decodable body, every route except `GET /health`, `GET /ready` and `GET /openapi.json` refuses a missing token with 401, and every `{tripId}` route refuses a nonparticipant with 404. A route cannot hide from that check. | `tests/test_app_permissions.py` |
 | A nonparticipant, a missing trip and a malformed id get the same answer, apart from `requestId`. | `tests/test_app_permissions.py` |
 | Only the organizer edits a trip or manages participants. The organizer's own row cannot be added, changed or removed. | `tests/test_app_permissions.py` |
 | Invalid input gets an actionable error, never echoes the input, and saves nothing. | `tests/test_app_validation.py` |
@@ -89,6 +150,16 @@ Application, each proven over real HTTP against real Postgres:
 | Concurrently adding the same participant creates one row and no 500. | `tests/test_app_transactions.py`, with the same kind of trigger |
 | Migrations match the models. The database itself enforces date order, a nonnegative budget, valid roles, its keys and at most one organizer per trip. | `tests/test_app_database.py` |
 | Every error body has the provider's `Error` shape, including a 500. | `tests/test_app_errors.py`, and a client hook on every response of 400 or above |
+| Every provider response is validated against the contract. A schema-invalid, non-JSON, undeclared or unencodable answer is a failed leg or a 502, shows nothing and saves nothing. | `tests/test_app_provider.py` |
+| Search tells complete, partial, empty and failed apart for each destination, and a failed leg keeps the others. With the default timeout, a slow supplier is a warning, not a timeout. | `tests/test_app_provider.py` |
+| No price is presented as confirmed: every option and item is an `estimate`, and the confirmed total is `0.00`. | `tests/test_app_provider.py`, `tests/test_app_itinerary.py` |
+| The itinerary survives a hard kill, holds the provider's offer exactly as sent, and only editors and the organizer change it. | `tests/test_app_itinerary.py`, `tests/test_app_itinerary_permissions.py`, `tests/compose_smoke.py` |
+| Expired quotes, unavailable offers, missing information, party and date mismatches and schedule conflicts are reported, each with a case that must not raise it. | `tests/test_app_itinerary.py` |
+| Totals are exact and reproducible, and rounding exists only in `app/money.py`. | `tests/test_app_itinerary.py`, including a scan of `app/` |
+| Of concurrent itinerary writes holding the same `version`, exactly one wins. Every other gets a 409 with the current state, also when the item state changed under it. | `tests/test_app_concurrency.py` |
+| No database transaction stays open while the provider answers, and `/health` stays responsive under 50 waiting searches. | `tests/test_app_concurrency.py` |
+| A trip view never pairs a `version` with another version's destinations. The itinerary view reads the same way, but no test races it yet. | `tests/test_app_transactions.py` |
+| `/ready` answers 503 when the database does not, and never depends on the provider. | `tests/test_app_permissions.py` |
 
 ## Limits I accept
 
@@ -98,11 +169,21 @@ Application, each proven over real HTTP against real Postgres:
 - **Participant role changes are last-write-wins.** Adds are insert-or-conflict, and neither bumps the trip `version`. One organizer per trip makes a conflict unlikely. Add a version to `trip_participants` if two organizers' edits ever need to conflict.
 - **The organizer row is protected by the application only.** The database allows at most one organizer per trip, but a direct `UPDATE` can still change that row's role.
 - **`GET /openapi.json` is public** and is the one route outside its own schema. FastAPI registers it that way, and the permission walk names it explicitly.
-- **`GET /health` is liveness only.** It runs no query, so it stays green while Postgres is down. Add a `SELECT 1` if compose should wait on Postgres reachability.
+- **`GET /health` is liveness only,** and runs no query. `GET /ready` runs `SELECT 1` and is what the compose healthcheck uses. Neither calls the provider, because the application serves without it: a search with no provider shows every leg failed.
 - **Test tokens are a plain dictionary lookup,** which is not constant time. That does not matter for fixed test tokens, and a real identity provider replaces it.
 - **`ApiError` carries an HTTP status,** so the domain knows about HTTP. Split it when a non-HTTP caller, the MCP server of Iteration 6, needs the services.
 - **Migrations run online only.** Offline SQL scripts are not needed while the deploy runs `upgrade head` itself.
-- **`app/money.py` has no rounding function yet,** because nothing computes an amount. `ROUND_HALF_UP` lands there when Iteration 3 first needs it.
+- **One provider client per process, never closed.** The process exit closes its sockets. Add a lifespan hook if the client is ever restarted in-process.
+- **Overlaps compare every pair of items, O(n²).** That is fine for tens of items. Sort by start and sweep if an itinerary grows large.
+- **One version per trip.** An organizer's edit to the trip makes an editor's pending itinerary edit stale, and the reverse. Each gets a 409 with the current state, at the cost of one more request.
+- **A user waits on the provider for at most `PROVIDER_TIMEOUT_SECONDS`, 10 by default, per request.** On add and refresh, one deadline covers both attempts and the wait between them, and a retry that would not fit is not taken. Before this iteration's O7 change, the worst case was about 25 seconds.
+- **`expired` is the application's clock against `validUntil`.** It is a hint (A28). Only `POST /bookings`, in Iteration 4, decides.
+- **Every destination is expected to have an accommodation.** A day trip gets a `DESTINATION_WITHOUT_STAY` it may not need. The rule is stated in the response, among `rules`.
+- **The same offer may be added twice.** Both copies count toward the budget, and the second is reported as a `SCHEDULE_OVERLAP` with the first. Add a uniqueness rule if Iteration 4 needs one item per offer.
+- **A search covers at most 20 destinations,** so one request cannot fan out without bound.
+- **A provider response is read whole, with no size limit.** The provider is the only caller of this path, and the timeout bounds how long it can stream.
+- **The read inside a write transaction stays `READ COMMITTED`.** `REPEATABLE READ` there would turn the guarded `UPDATE`'s zero rows into a serialization error. A refusal judged on that read rechecks the version first, so a concurrent commit still answers 409. Every view the API returns is read in one `REPEATABLE READ` snapshot.
+- **The application waits for the provider mock to be healthy before compose starts it.** The application itself does not need the provider to start: without it, every search leg fails with its status.
 
 The mock's limits are in `docs/STATUS.md`, Section 2.6.
 

@@ -13,7 +13,7 @@ organizers = APIRouter(prefix="/trips/{tripId}", dependencies=[Depends(trip_orga
 
 @collection.post("", status_code=201)
 def create_trip(body: CreateTrip, user: str = Depends(current_user), session=Depends(get_session)):
-    return trips.create_trip(session, user, body.destinations, body.starts_on, body.ends_on, body.budget_usd)
+    return trips.create_trip(session, user, body.destinations, body.starts_on, body.ends_on, body.budget_usd, body.travelers)
 
 
 @collection.get("")
@@ -23,7 +23,7 @@ def list_trips(user: str = Depends(current_user), session=Depends(get_session)):
 
 @readers.get("")
 def get_trip(access=Depends(trip_member), session=Depends(get_session)):
-    return trips.get_trip(session, access.user, access.trip_id)
+    return trips.read_trip(session, access.user, access.trip_id)
 
 
 @organizers.patch("")

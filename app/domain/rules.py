@@ -31,6 +31,11 @@ def parse_date(text):
         raise ValueError("Use a real calendar date, such as 2030-06-10.") from None
 
 
+def parse_instant(text):
+    """Contract-valid date-times may carry a lowercase t or z, which fromisoformat refuses. Compare the result, never the string."""
+    return datetime.fromisoformat(text.upper())
+
+
 def date_errors(starts_on, ends_on, *, check_start):
     """A36. Exactly yesterday in UTC is accepted, so a traveller ahead of UTC can still start today."""
     errors = []

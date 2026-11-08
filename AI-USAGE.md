@@ -19,6 +19,63 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-07: Iteration 3, cross-review
+
+**Way of working:** the same as Iteration 2. One brief from the Director was the spec for both authors, and it gained an addendum after the first run. Claude Sonnet built `app/`, and Codex wrote `tests/` from the brief without reading `app/`. The Director measured every recommendation before the owner approved it, and ran every local check of the iteration.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `app/`, compose, first version | Claude Sonnet | Codex, read-only | 0, 2, 1 | All three reproduced on real processes and fixed by Sonnet |
+| `app/`, fixes and the owner's O5, O7 and O8 | Claude Sonnet | Codex, read-only | 0, 2, 0 | The `PATCH /trips` race reproduced and fixed. The malformed-id race rejected |
+| `tests/`, first round | Codex | Claude Sonnet (`qa-lead`) | 0, 9, 13. QA's 1 high and 8 medium count as major | All applied in round 2 |
+| `tests/`, round 2, and the mutation runner | Codex | Claude Sonnet (`qa-lead`) | 0, 4, 2 | 4 surviving mutations: two test gaps closed, one redundant line of `app/` deleted, one equivalent mutant dropped |
+| `tests/`, rounds 3 and 4 | Codex | Claude Sonnet (`qa-lead`) | 0, 3, 4 | Two stale mutations and one false kill corrected, and the O8 coverage widened, in round 6 |
+| Documents of this iteration | Director | Codex, read-only | 0, 10, 8 | All 18 accepted. 17 were wording, now fixed. One was a code defect: a `Retry-After` over 9 digits was shortened to 5 s, sent to Sonnet |
+| Recommendations for the 7 decisions | Director | Throwaway probes on real processes | 3 corrections | Approved by the owner |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| Director | The first load probe created an HTTP client per request, which costs 0.7 s each to load certificates. Its numbers showed no difference between sync and async | The wall time was 15 to 20 s against a 3 s baseline | Rerun with one shared client and a baseline. The difference appeared (`ARCHITECTURE.md`, Provider client) |
+| Director | The brief banned `float(` anywhere in `app/`, although the rule is about money | Sonnet worked around it with `Fraction` and reported it | `float` in `app/config.py`, and the scan exempts that file for that token |
+| Director | The brief did not foresee contract-valid strings with a NUL or a lone surrogate | Codex's review of `app/` | Addendum to the brief, then fixed |
+| Director | Told Codex that `app/` was final for round 4 while Sonnet was still building O8, so mutations A08 and A23 went stale | `qa-lead`'s third review, with a stale check of every entry | Anchors corrected in round 6 |
+| Director | `TaskStop` on the mutation run left `mutation_check.py`, its `pytest`, an orphaned mock from 18:53 and a Postgres container alive, the same failure as in Iteration 2 | Listing processes by command line after the stop | Stopped by process tree and removed by name, then verified at 0 |
+| Director | `tests/mutation_check.py` copies `app/` without `contracts/`, so every app mutation would die because the application cannot start, not because a test caught it | Reading the runner before the round that adds mutations | Sent to Codex: copy the contract, and report such a death as a false kill |
+| Claude Sonnet | A NUL in a provider string reached jsonb, and add answered 500. It left a `ponytail:` comment instead of refusing it at the boundary | Codex's review, reproduced with the mock's control interface | `_clean` refuses it as `PROVIDER_INVALID_RESPONSE` |
+| Claude Sonnet | Reorder and delete checked `version`, then read item state. A commit in between turned the 409 into a 422 or a 404 | Codex's review, reproduced by holding `LOCK TABLE itinerary_items` from a test connection | A refusal that depends on item state rechecks the version first |
+| Claude Sonnet | `DELETE ?version=` capped the digits at 40, so 41 digits answered 422 while a body answered 409 | Codex's review, reproduced | The cap is removed |
+| Claude Sonnet | Worked around a test rule with `Fraction` instead of raising the conflict | Its own report | Reverted. The rule was fixed at its source, in the brief |
+| Codex | Tested lowercase `t`/`z` instants through the mock, which cannot handle them | The first run: the mock's search answered 503 | Sent back: through the stub |
+| Codex | Compared `" Lisbon "` with the server's trimmed value | The first run | Sent back |
+| Codex | Its overlap test does not separate instants from strings, so comparing strings would pass it | `qa-lead`, checked by the Director by hand | Sent back with two pairs that separate them |
+| Codex | Predicted that mutation A39, removing `parse_instant` from the offer check, survives because the schema already refuses the bad instants. The cause was wrong: the contract's `date-time` check accepts `"2030-06-13T11:00:00+01:00\n"`, and only `parse_instant` refuses it, so a stored instant like that would make every later read a 500 | `qa-lead`, reproduced by the Director with the application's validator | A test gap, not redundant code: a case with that instant is added |
+| Codex | Missed that A75, the model's deferrable flag, cannot die: the schema always comes from the migration | `qa-lead` | Dropped as an equivalent mutant |
+| Claude Sonnet | `RETRY_AFTER` accepted at most 9 digits, so a contract-valid 10-digit wait fell back to 5 s and was retried, which shortened it (A40) | Codex's review of the documents, then confirmed in a benchmark by Sonnet and Haiku | 4300 digits, the integer limit, and mutation A94 |
+| Claude Sonnet | `ProviderText` refused lone surrogates but not a NUL, so a NUL in a search's `providerId` reached the provider | Codex predicted it in round 2 and its test failed. The Director reproduced it | `_encodable` refuses a NUL, which also covers `offerId` |
+| Director | Overclaimed in the documents: US-05 counted as done, "no connection held" where the test proves no open transaction, an item snapshot no test races, the compose smoke reading the item after the database replacement, and an Iteration 4 prompt that still pointed at Iteration 3 | Codex's review of the documents | 17 wording fixes |
+| Claude Sonnet | `PATCH /trips` could pass its version check, then judge the dates against a stale start and answer 422 instead of 409 | Codex's second review, reproduced with `LOCK TABLE trip_destinations` held from a test connection | The version is rechecked before a 422 |
+| Codex | As reviewer, reported that a malformed item id under a race answers 404 instead of 409 | The Director: a malformed id can never be an item, so its 404 does not depend on anything a concurrent write changes | Rejected |
+| Claude Sonnet | Warned that removing the `trip_member` rollback could stall the pool under a burst of searches | The Director's probe: 80, then 200 simultaneous searches against a stub holding each answer 3 s all answered 200, in 4.1 s and 7.8 s | The deletion stands |
+| Claude Sonnet | The `session.rollback()` in `trip_member` is redundant: every route that awaits the provider rolls back in its own service first, so no test can tell it is gone (mutation A53) | Codex predicted it, and `qa-lead` traced every caller | Deleted, with its mutation |
+
+**Would more agents speed this up?** The owner asked whether a Haiku subagent and a second Codex agent on `gpt-5.6-terra` would help Sonnet. Each candidate ran the same read-only task with known answers: Q1 was a real defect (a `Retry-After` over 9 digits shortened to 5 s), Q2 was a trap (a malformed-id race that is not a defect, which Codex on `gpt-5.6-sol` had reported as one), and Q3 was a count.
+
+| Candidate | Q1, real defect | Q2, trap | Q3, count | Time | Tokens |
+|---|---|---|---|---|---|
+| Claude Sonnet | Found | Right | Right | 25 s | 92,576 |
+| Claude Haiku | Found | Right | Right | 44 s | 102,732 |
+| Codex, `gpt-5.6-terra` | **Missed** | Right | Right | 78 s | 37,503 |
+
+One task each, so this sizes the question rather than settling it. What bounded this iteration's wall time was the local runs, which no extra agent shortens: the suite (5 min), the mutation check (about 55 min) and the compose smoke (3 min). Running jobs side by side on one machine slowed the suite from 216 s to 354 s and flaked a timing test. A second Codex agent would also draw on the same subscription whose usage limit already stopped one round, although that the quota is shared is not verified.
+
+**Decision, by the owner:** Haiku is used only for mechanical read-only checks, never as an author or a reviewer of record. `gpt-5.6-terra` is not used for reviews. What speeds up the work is parallel sessions with disjoint files and scripted checks (`CLAUDE.md`).
+
+**Tooling:** Codex reached its usage limit in the middle of the second round, before changing any file. The run was queued for the reset 47 minutes later, rather than handing its tests to the application's author. The owner then set the rule in `CLAUDE.md`: when Codex stops, `qa-ux` takes its role at once.
+
 ### 2026-11-07: `clink` in a fresh PAL
 
 The owner asked for the live test that the first check of Iteration 2 could not run. A script started a new PAL over stdio and called the real `clink` tool, so `working_dir` came from the current file. Each role tried to create a uniquely named empty file at six paths. The disk matched Codex's report, and every probe was removed.
@@ -237,7 +294,7 @@ Every probe file was removed. A search of `C:\DEV` found no other file changed s
 
 ### Iterations 0 and 1
 
-Moved from `docs/STATUS.md`. All were detected by testing or by reading the contract. The first eight came up during the contract review, and whether the recommendations behind them came from an AI is still open (`docs/STATUS.md`, 1.4, item 5).
+Moved from `docs/STATUS.md`. All were detected by testing or by reading the contract. The first eight came up during the contract review. The recommendations behind them came from AI: the owner debated and validated ideas with Gemini Flash, and researched with Google AI (confirmed by the owner on 2026-11-07, closing `docs/STATUS.md` 1.4, item 5).
 
 | What went wrong | How it was detected | What changed |
 |---|---|---|

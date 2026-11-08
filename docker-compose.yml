@@ -58,11 +58,16 @@ services:
     environment:
       APP_DATABASE_URL: postgresql+psycopg://travel:travel@db:5432/travel
       APP_TOKENS: ${APP_TOKENS:-token-ana:ana,token-ben:ben,token-cam:cam,token-dee:dee}
+      PROVIDER_BASE_URL: http://provider-mock:4010/v1
+      PROVIDER_TOKEN: ${PROVIDER_TOKEN:-travel-demo-token}
+      PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-10}
     depends_on:
       migrate:
         condition: service_completed_successfully
+      provider-mock:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
       interval: 5s
       timeout: 3s
       retries: 5

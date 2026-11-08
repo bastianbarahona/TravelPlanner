@@ -5,12 +5,18 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
 
 import httpx
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from contract import ROOT
 from support import HTTP_OPTIONS
@@ -193,6 +199,17 @@ def valid_trip_body(**overrides):
         "startsOn": starts_on.isoformat(),
         "endsOn": (starts_on + timedelta(days=3)).isoformat(),
         "budgetUsd": "420.10",
+        "travelers": 2,
+    } | overrides
+
+
+def planning_trip_body(**overrides):
+    return {
+        "destinations": ["Lisbon"],
+        "startsOn": "2030-06-10",
+        "endsOn": "2030-06-13",
+        "budgetUsd": "1000.00",
+        "travelers": 2,
     } | overrides
 
 
@@ -209,6 +226,213 @@ def create_trip(client, **overrides):
         "participants": [{"userId": "ana", "role": "organizer"}],
     }
     return trip
+
+
+def create_planning_trip(client, **overrides):
+    body = planning_trip_body(**overrides)
+    response = client.post("/trips", json=body)
+    assert response.status_code == 201, response.text
+    trip = response.json()
+    assert trip == {
+        "id": trip["id"],
+        **body,
+        "version": 1,
+        "role": "organizer",
+        "participants": [{"userId": "ana", "role": "organizer"}],
+    }
+    return trip
+
+
+def add_participant(client, trip_id, user_id, role="viewer"):
+    response = client.post(
+        f"/trips/{trip_id}/participants", json={"userId": user_id, "role": role}
+    )
+    assert response.status_code == 201, response.text
+    assert response.json() == {"userId": user_id, "role": role}
+    return response.json()
+
+
+def stub_offer(offer_id="stub-offer", **changes):
+    return {
+        "id": offer_id,
+        "providerId": "stub-supplier",
+        "category": "accommodation",
+        "title": "Stub hotel",
+        "description": "A contract-valid response from the test supplier.",
+        "destination": "Lisbon",
+        "startsAt": "2030-06-10T15:00:00+01:00",
+        "endsAt": "2030-06-13T11:00:00+01:00",
+        "travelers": 2,
+        "price": {"amount": "420.00", "currency": "USD"},
+        "revision": "stub-revision-1",
+        "available": True,
+        "validUntil": "2099-01-01T00:00:00Z",
+    } | changes
+
+
+def stub_search_result(offer=None, **changes):
+    return {
+        "offers": [offer or stub_offer()],
+        "partial": False,
+        "warnings": [],
+        "searchedAt": "2030-06-01T12:00:00Z",
+    } | changes
+
+
+def provider_error(code="PROVIDER_UNAVAILABLE"):
+    return {"code": code, "message": "The stub refused the request.", "requestId": "stub-request-1"}
+
+
+def install_delay_trigger(db_engine, name, event, table):
+    with db_engine.begin() as connection:
+        connection.execute(
+            text(
+                f"CREATE FUNCTION {name}() RETURNS trigger LANGUAGE plpgsql "
+                "AS $$ BEGIN PERFORM pg_sleep(0.3); RETURN NEW; END $$"
+            )
+        )
+        connection.execute(
+            text(
+                f"CREATE TRIGGER {name} BEFORE {event} ON {table} "
+                f"FOR EACH ROW EXECUTE FUNCTION {name}()"
+            )
+        )
+
+
+def remove_delay_trigger(db_engine, name, table):
+    with db_engine.begin() as connection:
+        connection.execute(text(f"DROP TRIGGER IF EXISTS {name} ON {table}"))
+        connection.execute(text(f"DROP FUNCTION IF EXISTS {name}()"))
+
+
+def assert_constraint(db_engine, statement, parameters, name):
+    with pytest.raises(IntegrityError) as caught:
+        with db_engine.begin() as connection:
+            connection.execute(text(statement), parameters)
+    assert caught.value.orig.diag.constraint_name == name
+
+
+def insert_trip(db_engine, trip_id):
+    with db_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO trips (id, starts_on, ends_on, budget_usd, travelers, version) "
+                "VALUES (:id, '2030-06-10', '2030-06-13', 1.00, 2, 1)"
+            ),
+            {"id": trip_id},
+        )
+
+
+@dataclass
+class StubResponse:
+    status: int = 200
+    body: object = field(default_factory=dict)
+    headers: dict = field(default_factory=dict)
+    chunks: list[bytes] | None = None
+    delay: float = 0.0
+
+
+class ProviderStub:
+    """Small programmable real HTTP server for provider failures the mock cannot emit."""
+
+    def __init__(self, responder):
+        self.responder = responder
+        self.requests = []
+        self.exceptions = []
+        self.condition = threading.Condition()
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self):
+                self._handle()
+
+            def do_POST(self):
+                self._handle()
+
+            def _handle(self):
+                length = int(self.headers.get("content-length", "0"))
+                raw = self.rfile.read(length)
+                try:
+                    body = json.loads(raw) if raw else None
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    body = raw
+                request = {
+                    "method": self.command,
+                    "path": self.path,
+                    "headers": {key.lower(): value for key, value in self.headers.items()},
+                    "body": body,
+                }
+                with owner.condition:
+                    owner.requests.append(request)
+                    owner.condition.notify_all()
+                try:
+                    reply = owner.responder(request)
+                except BaseException as error:
+                    with owner.condition:
+                        owner.exceptions.append(error)
+                        owner.condition.notify_all()
+                    self.close_connection = True
+                    return
+                if reply.chunks is not None:
+                    payload = b"".join(reply.chunks)
+                elif isinstance(reply.body, bytes):
+                    payload = reply.body
+                else:
+                    payload = json.dumps(reply.body).encode()
+                self.send_response(reply.status)
+                headers = {key.lower(): value for key, value in reply.headers.items()}
+                if "content-type" not in headers:
+                    headers["content-type"] = (
+                        "application/octet-stream" if isinstance(reply.body, bytes) else "application/json"
+                    )
+                headers.setdefault("content-length", str(len(payload)))
+                for key, value in headers.items():
+                    self.send_header(key, str(value))
+                self.end_headers()
+                try:
+                    if reply.chunks is None:
+                        self.wfile.write(payload)
+                    else:
+                        for chunk in reply.chunks:
+                            time.sleep(reply.delay)
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+            def log_message(self, _format, *_args):
+                pass
+
+        class Server(ThreadingHTTPServer):
+            daemon_threads = True
+            request_queue_size = 128
+
+        self.server = Server(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}/v1"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+        if self.exceptions:
+            raise self.exceptions[0]
+
+    def wait_for_requests(self, count, timeout=5):
+        deadline = time.monotonic() + timeout
+        with self.condition:
+            while len(self.requests) < count:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self.condition.wait(remaining)
+        return True
 
 
 def raw_json_request(client, method, path, body):

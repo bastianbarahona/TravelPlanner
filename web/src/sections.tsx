@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IDENTITIES } from "./api";
 import { TripForm, valuesOf, type TripValues } from "./TripForm";
-import type { Attempt, BookingState, Doc, Item, Itinerary, Leg, Offer, Quote, Trip } from "./types";
+import type { AssistantAnswer, Attempt, BookingState, Doc, Item, Itinerary, Leg, Offer, Quote, Trip } from "./types";
 import { Field, FieldError, OtherErrors, type FieldErrors } from "./ui";
 
 export const PENDING_RELEASE_MS = 75_000;
@@ -364,6 +364,54 @@ export function Documents({ docs, canWrite, busy, onGenerate, onDownload, onRetr
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+// Assistant.
+
+export function AssistantPanel({ answer, asking, errors, onAsk }: {
+  answer: AssistantAnswer | null;
+  asking: boolean;
+  errors: FieldErrors;
+  onAsk: (question: string) => void;
+}) {
+  const [question, setQuestion] = useState("");
+  return (
+    <section data-testid="assistant">
+      <h3>Assistant</h3>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAsk(question);
+        }}
+      >
+        <Field id="assistant-question" label="Question" name="question" errors={errors}>
+          {(control) => <textarea {...control} maxLength={1000} value={question} onChange={(e) => setQuestion(e.target.value)} />}
+        </Field>
+        <OtherErrors errors={errors} known={["question"]} />
+        <button type="submit" disabled={asking}>Ask</button>
+      </form>
+      <div aria-live="polite">
+        {asking && <p>Asking...</p>}
+        {answer && (
+          <>
+            <div data-testid="assistant-answer">
+              {answer.answer.split("\n").map((line, index) => <p key={index}>{line}</p>)}
+            </div>
+            <p data-testid="assistant-mode">Mode: {answer.mode}</p>
+            <ul data-testid="assistant-tools">
+              {answer.toolCalls.length === 0 && <li>No tools were called.</li>}
+              {answer.toolCalls.map((call, index) => (
+                <li key={index} data-testid="tool-call" data-error={call.isError ? "true" : "false"}>
+                  {call.name}
+                  {call.isError && " (tool error)"}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </section>
   );
 }

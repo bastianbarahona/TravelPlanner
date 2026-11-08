@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { POLL_MS, download, failure, request, requestFull, type ApiFailure } from "./api";
-import { Documents, ItinerarySection, Participants, SearchPanel, TripSummary, type Review } from "./sections";
+import { AssistantPanel, Documents, ItinerarySection, Participants, SearchPanel, TripSummary, type Review } from "./sections";
 import { bodyOf, type TripValues } from "./TripForm";
-import type { Attempt, Doc, Item, Itinerary, Leg, Offer, Trip } from "./types";
+import type { AssistantAnswer, Attempt, Doc, Item, Itinerary, Leg, Offer, Trip } from "./types";
 import { fieldErrors, noticeOf, pollNotice, type FieldErrors, type Notify } from "./ui";
 
 const OPEN = ["pending", "unknown"];
@@ -34,6 +34,9 @@ export function TripPage({ tripId, identity, notify }: { tripId: string; identit
   const [participantErrors, setParticipantErrors] = useState<FieldErrors>({});
   const [searchErrors, setSearchErrors] = useState<FieldErrors>({});
   const [itineraryErrors, setItineraryErrors] = useState<FieldErrors>({});
+  const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [assistantErrors, setAssistantErrors] = useState<FieldErrors>({});
 
   // A response that arrives after the identity or the trip changed is dropped.
   const generation = useRef(0);
@@ -100,6 +103,9 @@ export function TripPage({ tripId, identity, notify }: { tripId: string; identit
     setDocs(null);
     setLegs(null);
     setReview(null);
+    setAnswer(null);
+    setAsking(false);
+    setAssistantErrors({});
     loadAll();
     window.addEventListener("focus", loadAll);
     return () => {
@@ -196,6 +202,20 @@ export function TripPage({ tripId, identity, notify }: { tripId: string; identit
         setSearching(false);
       }
     }, { fields: setSearchErrors });
+
+  // Read-only: it uses its own `asking` flag, not `busy`. An answer that arrives after the identity or trip changed is dropped.
+  const ask = (question: string) =>
+    act(async () => {
+      const mine = generation.current;
+      setAnswer(null);
+      setAsking(true);
+      try {
+        const body = await call<AssistantAnswer>("POST", "/assistant", { question: question.trim() });
+        if (mine === generation.current) setAnswer(body);
+      } finally {
+        if (mine === generation.current) setAsking(false);
+      }
+    }, { fields: setAssistantErrors });
 
   const addOffer = (offer: Offer) =>
     itinerary && itineraryWrite(() => call<Itinerary>("POST", "/itinerary/items", { version: itinerary.version, offerId: offer.id }));
@@ -318,6 +338,7 @@ export function TripPage({ tripId, identity, notify }: { tripId: string; identit
         />
       )}
       {trip && <Documents docs={docs} canWrite={canWrite} busy={busy} onGenerate={generate} onDownload={downloadDocument} onRetry={retryDocument} />}
+      {trip && <AssistantPanel answer={answer} asking={asking} errors={assistantErrors} onAsk={ask} />}
     </>
   );
 }

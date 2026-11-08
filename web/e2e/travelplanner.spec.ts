@@ -245,3 +245,26 @@ test("shows a viewer the trip without any write control", async ({ page, request
   }
   await expect(page.getByRole("button", { name: "Search" })).toBeVisible();
 });
+
+// Playwright item 7: catches an assistant flow that works only with mocked frontend responses or omits result details.
+test("asks the deterministic assistant for accommodation", async ({ page, request }) => {
+  const trip = await createTrip(request);
+  await page.goto(`/#/trips/${trip.id}`);
+
+  const assistant = page.getByTestId("assistant");
+  await expect(assistant).toBeVisible();
+  await assistant.getByLabel("Question").fill("Find accommodation within budget");
+  await assistant.getByRole("button", { name: "Ask" }).click();
+
+  await expect(assistant.getByTestId("assistant-mode")).toHaveText("Mode: deterministic", {
+    timeout: 15_000,
+  });
+  const toolCalls = assistant.getByTestId("tool-call");
+  await expect(toolCalls.filter({ hasText: /^search_options$/ })).toHaveCount(1);
+  for (const toolCall of await toolCalls.all()) {
+    await expect(toolCall).toHaveAttribute("data-error", "false");
+  }
+  const answer = assistant.getByTestId("assistant-answer");
+  await expect(answer).toHaveText(/\S/);
+  await expect(answer).not.toContainText("failed");
+});

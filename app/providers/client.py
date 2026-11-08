@@ -10,12 +10,14 @@ import logging
 import random
 import re
 from pathlib import Path
+from typing import Any, NamedTuple
 from urllib.parse import quote
 
 import httpx
 from jsonschema import Draft202012Validator, ValidationError
 
 from app import config
+from app.context import request_id
 from app.domain.errors import ApiError
 from app.domain.rules import parse_instant
 from app.money import parse_amount
@@ -54,9 +56,23 @@ class ProviderError(ApiError):
         self.retry_after = retry_after
 
 
-def _invalid(why):
-    logger.error("provider response refused: %s", why[:200])
+def _invalid(why, content=b""):
+    # A42: the status and a bounded part of the body. Never a request header: ours carries the token.
+    logger.error("provider response refused: %s body=%r", why[:200], content[:200])
     return ProviderError(502, "PROVIDER_INVALID_RESPONSE", "The provider sent a response this application cannot use.")
+
+
+class Operation(NamedTuple):
+    id: str  # the contract's operationId, for the log line
+    validators: dict
+
+
+class Reply(NamedTuple):
+    """A declared status with a body that passed every check. `body` is a Booking or an Offer on 2xx, an Error otherwise."""
+
+    status: int
+    body: Any
+    retry_after: int | None = None
 
 
 def _operation(path, method):
@@ -67,11 +83,13 @@ def _operation(path, method):
             response = CONTRACT["components"]["responses"][response["$ref"].rsplit("/", 1)[1]]
         schema = {**response["content"]["application/json"]["schema"], "components": CONTRACT["components"]}
         validators[int(status)] = Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
-    return validators
+    return Operation(CONTRACT["paths"][path][method]["operationId"], validators)
 
 
 SEARCH = _operation("/offers/search", "post")
 GET_OFFER = _operation("/offers/{offerId}", "get")
+CREATE_BOOKING = _operation("/bookings", "post")
+GET_BOOKING_BY_REFERENCE = _operation("/bookings/by-reference/{clientReference}", "get")
 
 
 def _clean(value):
@@ -96,6 +114,21 @@ def _check_offer(offer):
         parse_instant(offer[field])
 
 
+def _check_booking(reference):
+    """`reference` is ours: another booking's reference is a provider bug, never adopted."""
+
+    def check(booking):
+        _check_offer(booking["offer"])
+        parse_instant(booking["createdAt"])
+        parse_instant(booking["updatedAt"])
+        if booking["clientReference"] != reference:
+            raise ValueError("clientReference is not ours")
+        if (booking["status"] == "failed") != ("failure" in booking):  # A16 is prose only: trust `status`, say so, keep the booking
+            logger.warning("provider booking %s breaks A16: status=%s, failure %s", booking["id"], booking["status"], "present" if "failure" in booking else "missing")
+
+    return check
+
+
 def _check_search(body):
     for offer in body["offers"]:
         _check_offer(offer)
@@ -107,48 +140,69 @@ def _retry_after(response):
     return int(text) if RETRY_AFTER.fullmatch(text) and int(text) >= 1 else None  # whole seconds, minimum 1
 
 
-def _failure(status, error, response):
+def _failure(status, error, retry_after):
     """A declared non-200 answer, already validated as the contract's Error."""
-    logger.warning("provider error status=%s code=%s requestId=%s", status, error["code"], error["requestId"])
     match status:
         case 400:
             return ProviderError(
                 400, "BAD_REQUEST", "The provider refused the search. Check the supplier (providerId) and the other fields."
             )
         case 401:
-            # An operator problem: never told to the end user (A38, 3.2).
-            logger.error("provider rejected our token requestId=%s", error["requestId"])
+            # An operator problem: never told to the end user (A38, 3.2). _exchange has logged it as an ERROR.
             return ProviderError(502, "PROVIDER_AUTH", "The provider integration is misconfigured. Try again later.")
         case 404:
             return ProviderError(409, "OFFER_GONE", "The provider no longer has this offer.")
         case 429:
-            return ProviderError(429, "RATE_LIMITED", "The provider is rate limiting us. Try again later.", _retry_after(response))
+            return ProviderError(429, "RATE_LIMITED", "The provider is rate limiting us. Try again later.", retry_after)
         case _:  # 503 is the only other declared status
             return ProviderError(503, "PROVIDER_UNAVAILABLE", "The provider is temporarily unavailable. Try again later.")
 
 
-async def _call(validators, check, deadline, method, path, **request):
+async def _exchange(operation, check, deadline, method, path, **request):
+    """One provider call and its one log line. A declared status with a valid body returns as a Reply. A call that
+    cannot be read raises ProviderError: PROVIDER_UNREACHABLE (timeout, connection) or PROVIDER_INVALID_RESPONSE
+    (undeclared status, non-JSON, schema-invalid). A body that passed the schema also passes `check`, on 2xx only."""
+    outcome, provider_request_id = "unreachable", "-"
     try:
-        # httpx's timeout applies to each read, so a response that drips bytes could run for ever. The deadline bounds the call.
-        async with asyncio.timeout_at(deadline):
-            response = await http.request(method, path, **request)
-    except (httpx.HTTPError, TimeoutError) as error:
-        logger.warning("provider unreachable: %s", type(error).__name__)
-        raise ProviderError(503, "PROVIDER_UNREACHABLE", "The provider did not answer in time. Try again later.") from None
-    validator = validators.get(response.status_code)
-    if validator is None:
-        raise _invalid(f"undeclared status {response.status_code}")
-    try:
-        body = json.loads(response.content)
-        _clean(body)
-        validator.validate(body)
-        if response.status_code == 200:
-            check(body)
-    except (ValueError, RecursionError, ValidationError) as error:  # ValueError: not JSON, amount, instant
-        raise _invalid(f"status {response.status_code}: {error}") from None
-    if response.status_code != 200:
-        raise _failure(response.status_code, body, response)
-    return body
+        try:
+            # httpx's timeout applies to each read, so a response that drips bytes could run for ever. The deadline bounds the call.
+            async with asyncio.timeout_at(deadline):
+                response = await http.request(method, path, **request)
+        except (httpx.HTTPError, TimeoutError) as error:
+            if isinstance(error, (httpx.TimeoutException, TimeoutError)):
+                outcome = "timeout"
+            raise ProviderError(503, "PROVIDER_UNREACHABLE", "The provider did not answer in time. Try again later.") from None
+        outcome = "invalid"
+        validator = operation.validators.get(response.status_code)
+        if validator is None:
+            raise _invalid(f"undeclared status {response.status_code}", response.content)
+        try:
+            body = json.loads(response.content)
+            _clean(body)
+            validator.validate(body)
+            if response.status_code < 300:
+                check(body)
+        except (ValueError, RecursionError, ValidationError) as error:  # ValueError: not JSON, amount, instant
+            raise _invalid(f"status {response.status_code}: {error}", response.content) from None
+        outcome = str(response.status_code)
+        if response.status_code >= 400:
+            provider_request_id = body["requestId"]
+            if response.status_code == 401:  # an operator problem, whichever operation it was
+                logger.error("provider rejected our token requestId=%s", provider_request_id)
+        return Reply(response.status_code, body, _retry_after(response) if response.status_code == 429 else None)
+    finally:
+        logger.log(
+            logging.INFO if outcome in ("200", "201") else logging.WARNING,
+            "provider call op=%s status=%s requestId=%s providerRequestId=%s",
+            operation.id, outcome, request_id.get() or "-", provider_request_id,
+        )
+
+
+async def _call(operation, check, deadline, method, path, **request):
+    reply = await _exchange(operation, check, deadline, method, path, **request)
+    if reply.status != 200:
+        raise _failure(reply.status, reply.body, reply.retry_after)
+    return reply.body
 
 
 async def search(request):
@@ -183,3 +237,21 @@ async def get_offer(offer_id):
             if attempt == 2 or wait is None or wait > MAX_WAIT or loop.time() + wait >= deadline:
                 raise
             await asyncio.sleep(wait)
+
+
+async def create_booking(key, request):
+    """One POST, never retried here (A14): only the user resends it. `request` is the stored CreateBookingRequest, and
+    it is sent as the same bytes every time (sorted keys), whatever order the database returned its keys in."""
+    deadline = asyncio.get_running_loop().time() + config.PROVIDER_TIMEOUT_SECONDS
+    content = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
+    headers = {"Content-Type": "application/json", "Idempotency-Key": key}
+    return await _exchange(
+        CREATE_BOOKING, _check_booking(request["clientReference"]), deadline, "POST", "/bookings", content=content, headers=headers
+    )
+
+
+async def get_booking_by_reference(reference):
+    """A read (A20). Never retried here: the reconciliation loop is the retry."""
+    deadline = asyncio.get_running_loop().time() + config.PROVIDER_TIMEOUT_SECONDS
+    path = f"/bookings/by-reference/{quote(reference, safe='')}"
+    return await _exchange(GET_BOOKING_BY_REFERENCE, _check_booking(reference), deadline, "GET", path)

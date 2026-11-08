@@ -1,21 +1,22 @@
 """Pure itinerary rules: how a stored offer is shown, which issues the itinerary has, and what it costs.
 
 Nothing here touches the database or the network, and nothing is stored: issues and budget are computed at read time.
-`trip` is the trip view (app/services/trips.py), `items` are {id, position, offer} ordered by position, and `offer`
-is the provider's snapshot. A-numbers refer to docs/CONTRACT_NOTES.md.
+`trip` is the trip view (app/services/trips.py), `items` are {id, position, offer[, booking]} ordered by position, `offer`
+is the provider's snapshot and `booking` is the latest attempt's view (app/domain/booking.py), absent when there is none. A-numbers refer to docs/CONTRACT_NOTES.md.
 """
 from decimal import Decimal
 
+from app.domain.booking import OPEN
 from app.domain.rules import parse_date, parse_instant
 from app.money import format_amount, parse_amount
 
 ROUNDING_RULE = "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
 
 RULES = [
-    "Every price is an estimate until a booking confirms it. Nothing is booked in this version, so the confirmed total is always 0.00.",
+    "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
     "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
     "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
-    "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired.",
+    "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
     "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
     "A transport offer with no origin is missing information, not an error.",
     "The party is checked by comparing the offer's travelers with the trip's travelers.",
@@ -25,15 +26,23 @@ RULES = [
 ]
 
 
-def price_kind(offer):
-    # Iteration 4 returns "confirmed" here for an offer that a confirmed booking covers.
-    return "estimate"
+def price_kind(item):
+    return "confirmed" if item.get("booking", {}).get("state") == "confirmed" else "estimate"
 
 
-def quote(offer, now):
+def quote(offer, now, kind="estimate"):
     """An offer as shown to the user. `expired` uses the application's clock (A28)."""
     expired = now >= parse_instant(offer["validUntil"])
-    return {"offer": offer, "priceKind": price_kind(offer), "expired": expired, "bookable": offer["available"] and not expired}
+    return {"offer": offer, "priceKind": kind, "expired": expired, "bookable": offer["available"] and not expired}
+
+
+def item_view(item, now):
+    shown = {"id": item["id"], "position": item["position"], **quote(item["offer"], now, price_kind(item))}
+    if item.get("booking", {}).get("state") in (*OPEN, "confirmed"):
+        shown["bookable"] = False  # an attempt is open or done: booking again is refused anyway (A12)
+    if "booking" in item:
+        shown["booking"] = item["booking"]
+    return shown
 
 
 def _issue(code, message, item_ids, **extra):
@@ -65,10 +74,10 @@ def issues(trip, items, now):
             message = f"{offer['title']} is for {offer['travelers']} travelers, and the trip has {trip['travelers']}."
             found.append(_issue("PARTY_MISMATCH", message, [item["id"]]))
     for item in items:
-        if now >= parse_instant(item["offer"]["validUntil"]):
+        if price_kind(item) == "estimate" and now >= parse_instant(item["offer"]["validUntil"]):  # a confirmed price is the accepted one
             found.append(_issue("PRICE_EXPIRED", f"The quote for {item['offer']['title']} has expired.", [item["id"]]))
     for item in items:
-        if not item["offer"]["available"]:
+        if price_kind(item) == "estimate" and not item["offer"]["available"]:
             found.append(_issue("UNAVAILABLE", f"{item['offer']['title']} is no longer available.", [item["id"]]))
     for item in items:
         offer = item["offer"]
@@ -90,8 +99,10 @@ def issues(trip, items, now):
 def budget(trip, items):
     lines, totals = [], {"estimate": Decimal("0.00"), "confirmed": Decimal("0.00")}
     for item in items:
-        offer, kind = item["offer"], price_kind(item["offer"])
-        amount = parse_amount(offer["price"]["amount"])  # Decimal("0.00") is falsy: a free activity keeps its line
+        offer, kind = item["offer"], price_kind(item)
+        # A confirmed item costs what the provider accepted (US-05, A26), not what the snapshot says now.
+        priced = item["booking"]["booking"]["offer"] if kind == "confirmed" else offer
+        amount = parse_amount(priced["price"]["amount"])  # Decimal("0.00") is falsy: a free activity keeps its line
         totals[kind] += amount
         lines.append(
             {"itemId": item["id"], "title": offer["title"], "category": offer["category"], "amountUsd": format_amount(amount), "priceKind": kind}
@@ -114,7 +125,7 @@ def view(trip, items, now):
     return {
         "tripId": trip["id"],
         "version": trip["version"],
-        "items": [{"id": item["id"], "position": item["position"], **quote(item["offer"], now)} for item in items],
+        "items": [item_view(item, now) for item in items],
         "issues": issues(trip, items, now),
         "rules": RULES,
         "budget": budget(trip, items),

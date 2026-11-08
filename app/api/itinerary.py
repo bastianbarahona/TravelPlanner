@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import trip_editor, trip_member
-from app.api.schemas import AddItem, Refresh, Reorder, Version
+from app.api.schemas import AddItem, Book, Refresh, Reorder, Retry, Version
 from app.db.session import get_session
-from app.services import itinerary
+from app.services import booking, itinerary
 
 # Reads for every participant, writes for the organizer and editors. A new route joins one and inherits its checks.
 readers = APIRouter(prefix="/trips/{tripId}/itinerary", dependencies=[Depends(trip_member)])
@@ -33,3 +33,18 @@ def reorder(body: Reorder, access=Depends(trip_editor), session=Depends(get_sess
 @editors.post("/items/{itemId}/refresh")
 async def refresh_item(itemId: str, body: Refresh, access=Depends(trip_editor), session=Depends(get_session)):
     return await itinerary.refresh_item(session, access, body.version, itemId)
+
+
+@readers.get("/items/{itemId}/booking")
+def get_booking(itemId: str, access=Depends(trip_member), session=Depends(get_session)):
+    return booking.read(session, access, itemId)
+
+
+@editors.post("/items/{itemId}/booking", status_code=201)
+async def book_item(itemId: str, body: Book, access=Depends(trip_editor), session=Depends(get_session)):
+    return await booking.book(session, access, itemId, body.expected_revision, body.expected_price_usd)
+
+
+@editors.post("/items/{itemId}/booking/retry")
+async def retry_booking(itemId: str, body: Retry = None, access=Depends(trip_editor), session=Depends(get_session)):
+    return await booking.retry(session, access, itemId)

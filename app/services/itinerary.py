@@ -9,9 +9,13 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi.concurrency import run_in_threadpool
+from psycopg.errors import ForeignKeyViolation, UniqueViolation
 from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.exc import IntegrityError
 
-from app.db.models import ItineraryItem, Trip
+from app.db import attempts
+from app.db.models import BookingAttempt, ItineraryItem, Trip
+from app.domain.booking import CLOSED_WITHOUT_BOOKING, attempt_view
 from app.domain.errors import ApiError, ValidationFailed, not_found
 from app.db.session import begin_snapshot
 from app.domain.itinerary import view
@@ -27,8 +31,13 @@ def itinerary_view(session, caller, trip_id):
         .where(ItineraryItem.trip_id == trip_id)
         .order_by(ItineraryItem.position)
     ).all()
+    # Views are built before the rollback: it expires the entities, and a later attribute read would reload them outside the snapshot.
+    latest = {item_id: attempt_view(attempt) for item_id, attempt in attempts.latest(session, trip_id=trip_id).items()}
     session.rollback()
     items = [{"id": str(row.id), "position": row.position, "offer": row.offer} for row in rows]
+    for item in items:
+        if (attempt := latest.get(UUID(item["id"]))) is not None:
+            item["booking"] = attempt
     return view(trip, items, datetime.now(UTC))
 
 
@@ -37,6 +46,15 @@ def _conflict(session, access):
         409,
         "VERSION_CONFLICT",
         "The itinerary changed since you read it. Review details.current and send its version.",
+        {"current": itinerary_view(session, access.user, access.trip_id)},
+    )
+
+
+def _has_booking(session, access):
+    return ApiError(
+        409,
+        "ITEM_HAS_BOOKING",
+        "This item has a booking that is open or confirmed, so it cannot be removed. Review details.current.",
         {"current": itinerary_view(session, access.user, access.trip_id)},
     )
 
@@ -55,11 +73,12 @@ def _bump(session, access, version):
         raise _conflict(session, access)
 
 
-def _item(session, access, version, text):
+def find_item(session, access, version, text):
     """The item's id, position and snapshot. A malformed, missing or other-trip id is the same 404.
 
     A missing row may only mean a concurrent write removed it. Every write bumps the version with its change, so a
-    version still equal to the request's proves nothing was committed since the first check: only then is it a 404."""
+    version still equal to the request's proves nothing was committed since the first check: only then is it a 404.
+    `version` is None for a booking route, which never takes the trip version (nothing to recheck)."""
     try:
         item_id = UUID(text)
     except ValueError:
@@ -72,7 +91,7 @@ def _item(session, access, version, text):
             )
         ).one_or_none()
     if row is None:
-        if str(item_id) == text.lower():
+        if str(item_id) == text.lower() and version is not None:
             _check_version(session, access, version)
         raise not_found()
     return item_id, row.position, row.offer
@@ -88,7 +107,18 @@ def _append(session, access, version, offer):
     # Positions are always 0..n-1, so the count is the next one. The bump holds the trip row until commit,
     # so no other writer can insert in between.
     position = session.scalar(select(func.count()).where(ItineraryItem.trip_id == access.trip_id))
-    session.execute(insert(ItineraryItem).values(id=uuid4(), trip_id=access.trip_id, position=position, offer=offer))
+    try:
+        session.execute(insert(ItineraryItem).values(id=uuid4(), trip_id=access.trip_id, position=position, offer=offer))
+    except IntegrityError as error:
+        if not (isinstance(error.orig, UniqueViolation) and error.orig.diag.constraint_name == "uq_itinerary_offer"):
+            raise
+        session.rollback()  # the bump goes with it: a refused add changes nothing
+        raise ApiError(
+            409,
+            "OFFER_ALREADY_IN_ITINERARY",
+            "This offer is already in the itinerary. Each offer can be added once.",
+            {"current": itinerary_view(session, access.user, access.trip_id)},
+        ) from None
     session.commit()
     return itinerary_view(session, access.user, access.trip_id)
 
@@ -104,9 +134,23 @@ async def add_item(session, access, version, offer_id):
 
 def remove_item(session, access, version, text):
     _check_version(session, access, version)
-    item_id, position, _offer = _item(session, access, version, text)
+    item_id, position, _offer = find_item(session, access, version, text)
+    latest = attempts.latest(session, item_id=item_id)
+    if latest is not None and latest.state not in CLOSED_WITHOUT_BOOKING:
+        raise _has_booking(session, access)
     _bump(session, access, version)
-    session.execute(delete(ItineraryItem).where(ItineraryItem.id == item_id))
+    try:
+        # A rejected or failed attempt held no booking, so its record goes with the item. The FK stops the rest, and
+        # also an attempt that a concurrent POST .../booking commits between the check above and this statement.
+        session.execute(
+            delete(BookingAttempt).where(BookingAttempt.item_id == item_id, BookingAttempt.state.in_(CLOSED_WITHOUT_BOOKING))
+        )
+        session.execute(delete(ItineraryItem).where(ItineraryItem.id == item_id))
+    except IntegrityError as error:
+        if not isinstance(error.orig, ForeignKeyViolation):
+            raise
+        session.rollback()
+        raise _has_booking(session, access) from None
     session.execute(  # close the gap, so positions stay 0..n-1. The unique constraint is deferred to commit.
         update(ItineraryItem)
         .where(ItineraryItem.trip_id == access.trip_id, ItineraryItem.position > position)
@@ -133,14 +177,14 @@ def reorder(session, access, version, item_ids):
 
 def _stored_quote(session, access, version, text):
     _check_version(session, access, version)
-    item_id, _position, offer = _item(session, access, version, text)
+    item_id, _position, offer = find_item(session, access, version, text)
     session.rollback()
     return item_id, offer
 
 
 def _replace_quote(session, access, version, item_id, fresh):
     _check_version(session, access, version)  # something changed while we asked the provider
-    if fresh != _item(session, access, version, str(item_id))[2]:
+    if fresh != find_item(session, access, version, str(item_id))[2]:
         _bump(session, access, version)
         session.execute(update(ItineraryItem).where(ItineraryItem.id == item_id).values(offer=fresh))
         session.commit()

@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary and the budget exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation exist. Anything here about a later iteration is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -14,7 +14,7 @@ The table of decisions in `CLAUDE.md` is the short version. This file holds the 
 
 **What this does not buy:** the provider sits outside every transaction, so a monolith does not make a booking atomic. US-08 rests on committing the attempt before the POST, and on reconciliation (`docs/CONTRACT_NOTES.md`, 2.7 and 2.9). Those are needed in either architecture.
 
-**Growth path:** domains stay separated in code, so the document worker and the MCP server can run as separate processes from the same codebase, then move to their own containers if traffic justifies it. Whether they start that way is decided in Iterations 4 and 6.
+**Growth path:** domains stay separated in code, so the document worker and the MCP server can run as separate processes from the same codebase, then move to their own containers if traffic justifies it. Whether they start that way is decided in Iterations 5 and 6.
 
 ### Optimistic locking
 
@@ -105,13 +105,45 @@ Tested on 24 invalid offers: the schema with formats rejected 22, and the two it
 
 **Schedule conflicts:** instants, half-open intervals, so touching is not an overlap. A pair conflicts when its categories are equal, or are transport and activity. An accommodation conflicts only with another accommodation, because travelers leave a hotel during a stay. On the fixtures' coherent Lisbon plan, a naive overlap reported two false conflicts, hotel against activities, and this rule reports none. `10:00+01:00` and `10:00Z` are different instants, although their clock reading is the same. The response explains every simplified rule in `rules`.
 
+### Bookings and reconciliation
+
+**Decision:** a booking is an attempt in `booking_attempts`, committed as `unknown` before the POST is sent. The provider sits outside every transaction, so a crash after that commit leaves an attempt we can resume, never a booking we cannot find (`docs/CONTRACT_NOTES.md`, 2.7).
+
+**One attempt, one key, one reference.** The key is `uuid4().hex`. The reference is `trip-{tripId}-item-{itemId}-attempt-{n}` (A10). The attempt stores the exact `CreateBookingRequest`, and a retry sends the stored key and that request again, as the same bytes (sorted keys), whatever order jsonb returned its keys in. Only the user sends a POST: `POST .../booking` once, `POST .../booking/retry` for an `unknown` attempt, whose body is absent or `{}` (a JSON `null` is a 422). Nothing in the background ever POSTs (A14).
+
+**One open attempt per item, in the database.** `uq_one_open_attempt` is a partial unique index on `item_id` where the state is not `rejected` or `failed`, so one attempt is open or confirmed at a time (A12). Of 24 concurrent bookings of one item, one wins and the rest answer `BOOKING_IN_PROGRESS` or `ALREADY_BOOKED` with the winner's attempt. A loser that hits `uq_one_open_attempt` or `UNIQUE (item_id, attempt_no)` never tries again: it reads the winner and answers 409 with it, and if the winner already closed as `failed` or `rejected` the code is `BOOKING_CONFLICT`. Looping on it let a fast winner close and a loser book a second time, which was found in review and is tested. `UNIQUE (item_id, attempt_no)` is the backstop for the number.
+
+**A booking never takes the trip `version`.** The expected revision and price protect the terms, and a poller that bumped the version would make every other editor's edit stale.
+
+**Outcomes (2.8).** `app/domain/booking.py` holds the table as a pure function. The state comes from `Booking.status`, never from the HTTP code. A timeout, a connection failure, an undeclared status, a non-JSON body and a schema-invalid body all leave `unknown` (A42, A45). A `Booking` whose `clientReference` is not ours is invalid. The two 409 conflicts look the booking up by reference: `IDEMPOTENCY_CONFLICT` adopts it, `REFERENCE_CONFLICT` adopts it only when `offer.id` and `offer.revision` equal the stored request.
+
+**Monotonic transitions, in the `UPDATE`'s `WHERE`.** `unknown` moves anywhere, `pending` moves to `pending`, `confirmed` or `failed`, and a closed state never changes (2.7, rule 7). So a late POST answer of `pending` after the poller stored `confirmed` changes nothing, and no lock or fence is needed: reads are idempotent and states only move forward.
+
+**Reconciliation loop.** One asyncio task per process, started by the lifespan. It claims due attempts in one `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`, which also moves `next_check_at` out, commits, and only then calls the provider with no transaction open. It reads `GET /bookings/by-reference/{clientReference}` (A20) and adopts a valid `Booking`. A 404, 429, 503, timeout or invalid body changes no state, only `last_checked_at`, `check_count` and the next interval. A 429 with a valid `Retry-After` moves `next_check_at` to the later of the configured interval and now plus that wait (capped at a day), so the poller never asks sooner than the provider said (A40). It never ends polling. It resumes from the database after a restart, and an exception in one poll is logged and the loop goes on. `BOOKING_POLL_INTERVALS` (default `5,10,30,60`, the last repeats) and `BOOKING_POLL_ENABLED` are the only settings.
+
+**What the user sees.** The attempt view says what happened and what to do next in `nextStep`. A `POST .../booking` answers 201 whatever the state, because the state, not the HTTP code, is the outcome. `GET .../booking` never calls the provider: it is the state endpoint the UI polls (A15). An item shows its latest attempt as `booking`.
+
+### One item per offer
+
+**Decision:** `uq_itinerary_offer`, a unique index on `(trip_id, offer->>'id')`. Adding an offer already in the trip answers `409 OFFER_ALREADY_IN_ITINERARY` with the itinerary as `details.current`, and the bump of the version rolls back with it. The provider call may already have happened, which costs nothing.
+
+**Why:** a booking belongs to an item, and the provider deduplicates per intent, not per offer (A12). Two items for one offer could book it twice.
+
+**Deleting an item.** Its `rejected` and `failed` attempts are deleted with it, in one transaction. An open or `confirmed` attempt answers `409 ITEM_HAS_BOOKING`. The foreign key from `booking_attempts.item_id` is `RESTRICT`, never `CASCADE`, and it is the backstop for a booking that commits between the check and the delete: that `ForeignKeyViolation` becomes the same 409. The Director probed this by hand with 24 races of delete against book: one winner each time, and no orphan attempt. The automated regression runs 20 rounds.
+
+### Diagnostics
+
+**Decision:** a pure ASGI middleware sets a request id, `request-<32 hex>`, in a `ContextVar`. Every error body's `requestId` is that id, and every response, a 500 included, carries it in `X-Request-Id`. Each provider call logs exactly one line, at INFO or above, after it ends: `provider call op=<operationId> status=<http status or timeout|unreachable|invalid> requestId=<ours> providerRequestId=<Error.requestId or ->`. The reconciliation loop sets `poll-<32 hex>` for each attempt it checks. Logs go to stderr.
+
+**Why:** an operator who holds one of our `requestId`s must reach the provider's `requestId` for the same call (owner's O4), and a provider error is otherwise invisible to the person who reads our logs.
+
 ### Party size
 
 **Decision:** `trips.travelers`, from 1 to 20, required on create and changed by the organizer. The provider requires a party on every search, and searching Lisbon for 3 travelers answered an empty result, which reads like "no options". The migration gives existing trips 1 traveler.
 
 ### Estimates and confirmed prices
 
-**Decision:** `priceKind` is derived, not stored. One function returns `estimate` today, and Iteration 4 adds `confirmed` there for an item covered by a confirmed booking, whose accepted price will be `Booking.offer.price`. The budget reports `estimatedUsd`, `confirmedUsd` and their total, so the distinction needs no new meaning for any column.
+**Decision:** `priceKind` is derived, not stored. It is `confirmed` when the item's latest attempt is `confirmed`, and then its budget line uses `booking.offer.price.amount`, the price the provider accepted, not the snapshot. Later price changes and refreshes never touch it (US-05, A26). Every other item is an `estimate`. The budget reports `estimatedUsd`, `confirmedUsd` and their total, so the distinction needs no new meaning for any column. The itinerary view reads the attempts in the same `REPEATABLE READ` snapshot as the items.
 
 **Rounding:** totals are exact `Decimal` sums of two-decimal prices, so nothing rounds today. `format_amount` quantizes half up all the same. Before this iteration it formatted with `:.2f`, which rounds half even and turned `0.125` into `0.12`. A source scan fails on any other rounding primitive in `app/`.
 
@@ -122,7 +154,7 @@ From the owner's notes. They belong to later iterations and stay open until then
 | Proposal | Decide in | What the review found |
 |---|---|---|
 | The assistant reads trips only through read-only SQL views, such as `v_mcp_trip_itinerary`, with the user filter added in Python | Iteration 6 | Postgres views take no parameters, so the filter lives in Python either way, and forgetting it leaks data. The view adds no permission check. What blocks mutations is a read-only database role, and the MCP layer exposing no write tools. "Only through views" also cannot cover option search, which US-12 requires and which comes from the provider. The likely simpler shape is MCP tools calling the same `services/` and the same permission check as the API. |
-| Separate `local_status` and `external_status` on a booking | Iteration 4 | The separation matches US-08. Two details need correcting. The reference cannot be one immutable UUID: each attempt has its own key and reference (A10, and 2.7 rules 4 and 5). Passive reconciliation alone cannot close `unknown` negatively, because a by-reference 404 is not proof, and only a same-key retry by the user can do that (A13, A14). |
+| Separate `local_status` and `external_status` on a booking | Iteration 4 | **Resolved in Iteration 4, as one state plus the provider's raw record.** `state` is ours (`unknown`, `rejected` and the provider's three), and `booking` holds the provider's `Booking` as received, with its own `status`, so the provider's word is never lost and no second status column can drift from it. The separation matches US-08. Two details needed correcting. The reference cannot be one immutable UUID: each attempt has its own key and reference (A10, and 2.7 rules 4 and 5). Passive reconciliation alone cannot close `unknown` negatively, because a by-reference 404 is not proof, and only a same-key retry by the user can do that (A13, A14). |
 
 ## Questions closed by the contract
 
@@ -152,12 +184,21 @@ Application, each proven over real HTTP against real Postgres:
 | Every error body has the provider's `Error` shape, including a 500. | `tests/test_app_errors.py`, and a client hook on every response of 400 or above |
 | Every provider response is validated against the contract. A schema-invalid, non-JSON, undeclared or unencodable answer is a failed leg or a 502, shows nothing and saves nothing. | `tests/test_app_provider.py` |
 | Search tells complete, partial, empty and failed apart for each destination, and a failed leg keeps the others. With the default timeout, a slow supplier is a warning, not a timeout. | `tests/test_app_provider.py` |
-| No price is presented as confirmed: every option and item is an `estimate`, and the confirmed total is `0.00`. | `tests/test_app_provider.py`, `tests/test_app_itinerary.py` |
+| No price is presented as confirmed unless a confirmed booking covers it: search options are always an `estimate`. | `tests/test_app_provider.py`, `tests/test_app_itinerary.py` |
 | The itinerary survives a hard kill, holds the provider's offer exactly as sent, and only editors and the organizer change it. | `tests/test_app_itinerary.py`, `tests/test_app_itinerary_permissions.py`, `tests/compose_smoke.py` |
 | Expired quotes, unavailable offers, missing information, party and date mismatches and schedule conflicts are reported, each with a case that must not raise it. | `tests/test_app_itinerary.py` |
+| Every row of the outcome table (`docs/CONTRACT_NOTES.md`, 2.8) leaves the state it names, for the first POST and for the retry of an `unknown` attempt, and the attempt keeps its key and reference. | `tests/test_app_booking*.py` |
+| The attempt is committed as `unknown` before the POST. A hard kill leaves it, and the poller reconciles by reference with no second POST, or the user retries with the same key and the same body. | `tests/test_app_booking*.py` |
+| Polling resolves `pending` to `confirmed` or `failed` with no user action, never turns `unknown` into anything on a 404, never POSTs, waits for a 429's `Retry-After`, resumes after a restart, and stops when `BOOKING_POLL_ENABLED=0`. | `tests/test_app_booking*.py` |
+| Of 24 concurrent bookings of one item (the ordinary race), exactly one reaches the provider and one attempt exists. In 12 staged simultaneous inserts, a loser never gets a second POST, even when the winner closes at once. After `confirmed` no other is allowed, and after `rejected` or `failed` a new one gets a new key and reference. | `tests/test_app_booking*.py` |
+| Changed terms are refused with no provider call, a quote changed at the provider is `rejected`, and the stored snapshot is untouched. | `tests/test_app_booking*.py` |
+| One item per offer, also under concurrent adds. An item with an open or confirmed booking cannot be deleted, and a concurrent delete and book never leave both succeeding or an orphan attempt. | `tests/test_app_booking*.py` |
+| A confirmed item stays `confirmed` at the provider's accepted price after the quote changes and the item is refreshed. Mixed outcomes stay visible side by side. | `tests/test_app_booking*.py` |
+| Success and error responses carry `X-Request-Id`, an error body's `requestId` equals it, and a provider call logs one line with both request ids. The test checks several 200s and a 404, not a 500. | `tests/test_app_diagnostics.py` |
+| Migration `0003` matches the models, and the database itself enforces one open attempt per item, `RESTRICT`, the state check and one item per offer. | `tests/test_app_migration_0003.py` |
 | Totals are exact and reproducible, and rounding exists only in `app/money.py`. | `tests/test_app_itinerary.py`, including a scan of `app/` |
 | Of concurrent itinerary writes holding the same `version`, exactly one wins. Every other gets a 409 with the current state, also when the item state changed under it. | `tests/test_app_concurrency.py` |
-| No database transaction stays open while the provider answers, and `/health` stays responsive under 50 waiting searches. | `tests/test_app_concurrency.py` |
+| No database transaction stays open while the provider answers a search, an add or a refresh (booking is not in that test), and `/health` stays responsive under 50 waiting searches. | `tests/test_app_concurrency.py` |
 | A trip view never pairs a `version` with another version's destinations. The itinerary view reads the same way, but no test races it yet. | `tests/test_app_transactions.py` |
 | `/ready` answers 503 when the database does not, and never depends on the provider. | `tests/test_app_permissions.py` |
 
@@ -177,9 +218,18 @@ Application, each proven over real HTTP against real Postgres:
 - **Overlaps compare every pair of items, O(n²).** That is fine for tens of items. Sort by start and sweep if an itinerary grows large.
 - **One version per trip.** An organizer's edit to the trip makes an editor's pending itinerary edit stale, and the reverse. Each gets a 409 with the current state, at the cost of one more request.
 - **A user waits on the provider for at most `PROVIDER_TIMEOUT_SECONDS`, 10 by default, per request.** On add and refresh, one deadline covers both attempts and the wait between them, and a retry that would not fit is not taken. Before this iteration's O7 change, the worst case was about 25 seconds.
-- **`expired` is the application's clock against `validUntil`.** It is a hint (A28). Only `POST /bookings`, in Iteration 4, decides.
+- **`expired` is the application's clock against `validUntil`.** It is a hint (A28). Only `POST /bookings` decides, and a booking of an item labeled expired is still sent.
 - **Every destination is expected to have an accommodation.** A day trip gets a `DESTINATION_WITHOUT_STAY` it may not need. The rule is stated in the response, among `rules`.
-- **The same offer may be added twice.** Both copies count toward the budget, and the second is reported as a `SCHEDULE_OVERLAP` with the first. Add a uniqueness rule if Iteration 4 needs one item per offer.
+- **Migration `0003` fails on a trip that holds the same offer twice,** which Iteration 3 allowed. Nothing was deployed before it, so no data is rewritten. Resolve such rows by hand first.
+- **Deleting an item deletes its `rejected` and `failed` attempts,** so that history is gone. An open or confirmed booking is never deleted. Keep closed attempts, and give them no foreign key to the item, if an audit trail is ever needed.
+- **The reconciliation loop is one task per process, waking every second at most.** The claim is safe across processes, but each process polls on its own: with many instances, raise the wake interval or move the loop to a worker. `booking_attempts` has no index on `next_check_at`, because the open attempts are few. Add a partial index on the open states when they are not.
+- **An `unknown` attempt is polled for ever,** at the last interval of `BOOKING_POLL_INTERVALS`. No timer closes it, because a by-reference 404 is not proof (A13). Only the user's retry can close it negatively.
+- **A 401 from the provider leaves attempts `unknown`** and logs an ERROR line for the operator. The application does not alert beyond its log, and does not stop polling.
+- **A click that arrives after the item's previous attempt closed as `failed` or `rejected` starts a new attempt** at the same reviewed terms. Rule 3 of the brief allows it, and it cannot double-book: one attempt is open at a time and none is allowed after `confirmed`. Only the loser of a simultaneous insert is refused, with the winner's attempt and `BOOKING_CONFLICT`.
+- **The database pool bounds concurrent booking opens per process.** SQLAlchemy's defaults, 5 connections plus 10 overflow, apply, and requests beyond them wait for a connection.
+- **"A crash of one poll never stops the loop" has no test.** The code enforces it with an exception guard around each poll and each attempt, but nothing kills a poll on purpose to prove it.
+- **Booking state changes do not bump the trip `version`,** so a version alone does not identify booking states. A document (Iteration 5) must record them itself.
+- **Two retries of one `unknown` attempt may run together.** Both send the same key and body, so the provider answers one booking (A8), and the monotonic update keeps the first outcome that moves forward.
 - **A search covers at most 20 destinations,** so one request cannot fan out without bound.
 - **A provider response is read whole, with no size limit.** The provider is the only caller of this path, and the timeout bounds how long it can stream.
 - **The read inside a write transaction stays `READ COMMITTED`.** `REPEATABLE READ` there would turn the guarded `UPDATE`'s zero rows into a serialization error. A refusal judged on that read rechecks the version first, so a concurrent commit still answers 409. Every view the API returns is read in one `REPEATABLE READ` snapshot.

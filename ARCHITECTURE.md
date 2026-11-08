@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary and the budget exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget and documents exist. Anything here about a later iteration is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -115,6 +115,20 @@ Tested on 24 invalid offers: the schema with formats rejected 22, and the two it
 
 **Rounding:** totals are exact `Decimal` sums of two-decimal prices, so nothing rounds today. `format_amount` quantizes half up all the same. Before this iteration it formatted with `:.2f`, which rounds half even and turned `0.125` into `0.12`. A source scan fails on any other rounding primitive in `app/`.
 
+### Documents
+
+**Decision:** a document is an HTML file built with the standard library from a source captured when it was requested, and generated later by a worker. Confirmed by the owner on 2026-11-07. PDF was left out, and no dependency was added.
+
+**Format:** every string from a user or the provider goes through `html.escape(..., quote=True)`. The file has no script and no external resource, and it downloads with `content-security-policy: default-src 'none'` and `x-content-type-options: nosniff`, so a hostile destination name stays text.
+
+**Storage and consistency:** the content is a `bytea` column in the document row, so a file and its reference commit in one transaction and cannot diverge. The database refuses a `complete` row without content (`ck_documents_complete`) and content whose SHA-256 is not `content_sha256` (`ck_documents_hash`). A download re-hashes the bytes anyway: a mismatch sets the document `failed` with a fenced `UPDATE`, sends no bytes, and answers 409 `DOCUMENT_CORRUPT`. A retry regenerates it, and the same source and `requested_at` render the same bytes, so the original hash comes back.
+
+**Snapshot (US-10):** the source is read when the document is requested, in one `REPEATABLE READ` snapshot: the trip, its items in position order and each item's booking state. It is stored as JSONB, and the worker only renders it, so a later edit never changes a document, and the file says which `Trip version` it shows. It holds nothing that depends on the clock or the caller, so two users asking for the same trip state hash to the same `source_sha256`. `UNIQUE (trip_id, source_sha256)` makes a repeated request return the stored document. The `INSERT ... ON CONFLICT DO NOTHING` runs after the snapshot ends: inside `REPEATABLE READ`, 11 of 12 concurrent inserts failed with serialization errors, and outside it 24 of 24 succeeded with one row.
+
+**Jobs:** `waiting`, `in_progress`, `complete`, `failed`. A worker claims one document per statement with `FOR UPDATE SKIP LOCKED`, takes a lease with a fresh token, and increments `attempts`. Every write that ends a claim (done, back to `waiting`, `failed`) has `WHERE lease_token = :token AND state = 'in_progress'`, so a worker whose lease expired and was taken over drops its result instead of overwriting the new owner's. An expired lease makes the document claimable again, which is how a killed process recovers. A claim that brings `attempts` above 3 ends `failed`, and so does a third render failure. No transaction is open while the worker renders or sleeps: each step is its own short transaction in the thread pool. A failed document is retried by the user, which resets `attempts`.
+
+**Booking states are a stub:** Iteration 4 is built in parallel and merges first. `booking_states` returns `{}` until then, and the merge replaces its body with the latest `booking_attempts` row per item, read in the same snapshot. Migration `0004` points at `0002` and changes to `0003` at that merge.
+
 ## Proposals recorded, not adopted
 
 From the owner's notes. They belong to later iterations and stay open until then.
@@ -160,6 +174,12 @@ Application, each proven over real HTTP against real Postgres:
 | No database transaction stays open while the provider answers, and `/health` stays responsive under 50 waiting searches. | `tests/test_app_concurrency.py` |
 | A trip view never pairs a `version` with another version's destinations. The itinerary view reads the same way, but no test races it yet. | `tests/test_app_transactions.py` |
 | `/ready` answers 503 when the database does not, and never depends on the provider. | `tests/test_app_permissions.py` |
+| A document is a point-in-time copy: later edits leave its bytes, `Trip version` and `tripVersion` unchanged, and a new request creates another document. | `tests/test_app_documents.py` |
+| Repeated and concurrent identical requests give one document: 24 concurrent `POST`s make one row, one `202` and the rest `200`, never a 500. | `tests/test_app_documents.py` |
+| A document is `complete` only with content whose SHA-256 is its record. The database refuses anything else, and a download that finds a mismatch sends no bytes, marks it `failed`, and a retry restores the original hash. | `tests/test_app_documents.py` |
+| A document survives a hard kill of the application and finishes after a restart. A worker that lost its lease cannot overwrite the new owner. A document that cannot render ends `failed` after 3 attempts, never `complete`. | `tests/test_app_documents.py` |
+| Viewers list, read and download documents. Only editors and the organizer request or retry. Every document route refuses like the rest. | `tests/test_app_documents.py`, `tests/test_app_permissions.py` |
+| A document's source pairs a `version` with that version's items: an edit committed in the middle of a capture does not tear it. | `tests/test_app_documents.py`, with a test that holds `LOCK TABLE itinerary_items` while the capture waits, then commits an item and a version bump |
 
 ## Limits I accept
 
@@ -184,6 +204,15 @@ Application, each proven over real HTTP against real Postgres:
 - **A provider response is read whole, with no size limit.** The provider is the only caller of this path, and the timeout bounds how long it can stream.
 - **The read inside a write transaction stays `READ COMMITTED`.** `REPEATABLE READ` there would turn the guarded `UPDATE`'s zero rows into a serialization error. A refusal judged on that read rechecks the version first, so a concurrent commit still answers 409. Every view the API returns is read in one `REPEATABLE READ` snapshot.
 - **The application waits for the provider mock to be healthy before compose starts it.** The application itself does not need the provider to start: without it, every search leg fails with its status.
+- **A document's content lives in Postgres.** That keeps the file and its record in one transaction, and it is fine for HTML of kilobytes. Large or binary files would need object storage and a reconciliation of the two.
+- **`DOCUMENT_RENDER_DELAY_SECONDS` is a test-only knob.** It exists so a test can see `in_progress`, kill the process mid-generation and take a lease. Leave it at 0 everywhere else.
+- **One worker loop per process, polling every 0.5 s.** `SKIP LOCKED` lets several processes share the queue without double work. Add `LISTEN/NOTIFY` if idle load or latency matters. The lease is a fixed `DOCUMENT_LEASE_SECONDS`, and a render slower than that would be claimed twice, which the fence makes harmless but wasteful.
+- **Documents are never deleted or expired,** and a trip with many edits can collect many documents. A list is not paginated, like every other list here.
+- **A document shows booking states as of its capture.** A booking that settles later does not change an existing document: request a new one.
+- **A `POST` or retry answers with the view read after its commit.** With the worker on, a `202` can already say `in_progress`.
+- **Two simultaneous downloads of a corrupt file both answer `DOCUMENT_CORRUPT`.** The second one's `details.current` is whatever it reads then. No bytes are ever sent.
+- **The corrupt-download `UPDATE` is fenced on `state = 'complete'` and on the hash it read,** but rendering is deterministic, so a regenerated document has the same hash, and only the state conjunct really fences.
+- **Not covered by the suite:** the worker loop surviving a database outage, `SKIP LOCKED` across several processes (probed only: 4 workers drained 200 jobs, each claimed once), and the cancellation of the worker on shutdown (tests use hard kills).
 
 The mock's limits are in `docs/STATUS.md`, Section 2.6.
 

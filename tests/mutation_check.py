@@ -391,11 +391,109 @@ APP_MUTATIONS = [
     ("A94", "Retry-After accepts at most nine digits", "providers/client.py", [
         ('RETRY_AFTER = re.compile(r"[0-9]{1,4300}")', 'RETRY_AFTER = re.compile(r"[0-9]{1,9}")'),
     ]),
+    # Iteration 5: documents.
+    ("A95", "document fence drops the lease token", "services/documents.py", [
+        (" AND lease_token=:token", ""),
+    ]),
+    ("A96", "expired document lease is never reclaimed", "services/documents.py", [
+        ("WHERE state='waiting' OR (state='in_progress' AND lease_until < now())", "WHERE state='waiting'"),
+    ]),
+    ("A97", "live document lease is reclaimed", "services/documents.py", [
+        ("lease_until < now()", "lease_until IS NOT NULL"),
+    ]),
+    ("A98", "download skips the re-hash", "services/documents.py", [
+        ("if hashlib.sha256(content).hexdigest() != row.content_sha256:", "if False:"),
+    ]),
+    ("A99", "corrupt document is not marked failed", "services/documents.py", [
+        ('.values(state="failed", content=None, content_sha256=None, completed_at=None, error=CORRUPT)',
+         ".values(error=CORRUPT)"),
+    ]),
+    ("A100", "document html is not escaped", "services/documents.py", [
+        ("    return html.escape(str(value), quote=True)", "    return str(value)"),
+    ]),
+    ("A101", "caller role leaks into the document source", "services/documents.py", [
+        ('keys = ("id", "destinations", "startsOn", "endsOn", "budgetUsd", "travelers", "version")',
+         'keys = ("id", "destinations", "startsOn", "endsOn", "budgetUsd", "travelers", "version", "role")'),
+    ]),
+    ("A102", "a random value leaks into the document source", "services/documents.py", [
+        ('"items": source_items, "budget": budget(trip, items)}', '"items": source_items, "budget": budget(trip, items), "nonce": str(uuid4())}'),
+    ]),
+    ("A103", "repeated document requests are not deduplicated", "services/documents.py", [
+        ("source_sha256=digest,", "source_sha256=uuid4().hex,"),
+    ]),
+    ("A104", "document request always reports created", "services/documents.py", [
+        ("return created is not None, view(", "return True, view("),
+    ]),
+    ("A105", "fourth document attempt still renders", "services/documents.py", [
+        ('if claim["attempts"] > MAX_ATTEMPTS:', "if False:"),
+    ]),
+    ("A106", "document render failure fails at once", "services/documents.py", [
+        ('claim["attempts"] < MAX_ATTEMPTS', 'claim["attempts"] < 1'),
+    ]),
+    ("A107", "document retry keeps attempts", "services/documents.py", [
+        ("attempts=0, ", ""),
+    ]),
+    ("A108", "document retry applies to any state", "services/documents.py", [
+        (', Document.state == "failed")', ")"),
+    ]),
+    ("A109", "document render reads the clock", "services/documents.py", [
+        ("{_e(_instant(document['requested_at']))}",
+         "{_e(_instant(__import__('datetime').datetime.now(__import__('datetime').UTC)))}"),
+    ]),
+    ("A110", "document request answers 200 and 202 swapped", "api/documents.py", [
+        ("    if not created:", "    if created:"),
+    ]),
+    ("A111", "document writes open to viewers", "api/documents.py", [
+        ("trip_editor", "trip_member"),
+    ]),
+    ("A112", "document worker flag is ignored", "config.py", [
+        ('DOCUMENT_WORKER_ENABLED = os.environ.get("DOCUMENT_WORKER_ENABLED", "1") != "0"', "DOCUMENT_WORKER_ENABLED = True"),
+    ]),
+    ("A113", "documents migration lacks the hash check", "db/migrations/versions/0004_documents.py", [
+        ("    sa.CheckConstraint(\"content IS NULL OR content_sha256 = encode(sha256(content), 'hex')\", name='ck_documents_hash'),\n", ""),
+    ]),
+    ("A114", "document lookup drops its trip scope", "services/documents.py", [
+        ("Document.id == document_id, Document.trip_id == access.trip_id", "Document.id == document_id"),
+    ]),
+    ("A115", "document insert stays inside the snapshot", "services/documents.py", [
+        ("    finally:\n        session.rollback()\n", "    finally:\n        pass\n"),
+    ]),
+    ("A116", "document capture reads outside one snapshot", "services/documents.py", [
+        ("    begin_snapshot(session)\n    try:", "    session.rollback()\n    try:"),
+    ]),
+    ("A117", "document id is not checked for its canonical form", "services/documents.py", [
+        ("if str(document_id) == raw_id.lower():", "if True:"),
+    ]),
+    ("A118", "document download is served inline", "api/documents.py", [
+        ("attachment; filename=", "inline; filename="),
+    ]),
+    ("A119", "document download drops its content security policy", "api/documents.py", [
+        ("            \"content-security-policy\": \"default-src 'none'\",\n", ""),
+    ]),
+    ("A120", "document claim does not count attempts", "services/documents.py", [
+        (", attempts=attempts+1", ""),
+    ]),
+    ("A121", "document lease length is ignored", "services/documents.py", [
+        ('"lease": config.DOCUMENT_LEASE_SECONDS', '"lease": 30'),
+    ]),
+    ("A122", "document finish keeps its lease", "services/documents.py", [
+        ('f"lease_token=NULL, lease_until=NULL {_FENCE}"', 'f"error=NULL {_FENCE}"'),
+    ]),
+    ("A123", "lifespan never starts the document worker", "main.py", [
+        ("if config.DOCUMENT_WORKER_ENABLED else None", "if False else None"),
+    ]),
+    ("A124", "documents migration lacks the unique source", "db/migrations/versions/0004_documents.py", [
+        ("    sa.UniqueConstraint('trip_id', 'source_sha256', name='uq_documents_source')\n", ""),
+    ]),
 ]
 
 
 APP_TEST_MAP = {
     "api/deps.py": ("test_app_permissions.py", "test_app_itinerary_permissions.py"),
+    "api/documents.py": ("test_app_documents.py",),
+    "config.py": ("test_app_documents.py",),
+    "services/documents.py": ("test_app_documents.py",),
+    "db/migrations/versions/0004_documents.py": ("test_app_documents.py", "test_app_database.py"),
     "api/itinerary.py": ("test_app_itinerary_permissions.py",),
     "api/participants.py": ("test_app_permissions.py",),
     "api/schemas.py": ("test_app_validation.py", "test_app_search_itinerary_validation.py"),
@@ -407,7 +505,7 @@ APP_TEST_MAP = {
     "db/models.py": ("test_app_database.py", "test_app_database_constraints.py"),
     "domain/itinerary.py": ("test_app_itinerary.py",),
     "domain/rules.py": ("test_app_validation.py",),
-    "main.py": ("test_app_errors.py", "test_app_permissions.py"),
+    "main.py": ("test_app_errors.py", "test_app_permissions.py", "test_app_documents.py"),
     "money.py": ("test_app_validation.py", "test_app_itinerary.py"),
     "providers/client.py": ("test_app_provider.py",),
     "services/itinerary.py": ("test_app_itinerary.py", "test_app_concurrency.py"),

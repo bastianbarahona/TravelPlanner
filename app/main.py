@@ -1,6 +1,8 @@
 """Travel planner API. Every error leaves as the provider's Error shape: {code, message, requestId}
 plus optional details. FastAPI's default {"detail": ...} bodies never appear."""
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 from http import HTTPStatus
 from uuid import uuid4
 
@@ -11,16 +13,29 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
-from app.api import itinerary, participants, search, trips
+from app import config
+from app.api import documents, itinerary, participants, search, trips
 from app.db.session import engine
 from app.domain.errors import ApiError, not_found
+from app.services.documents import document_worker
 
 logger = logging.getLogger("uvicorn.error")
 BAD_JSON = "The request body is not valid JSON."
 
+
+@asynccontextmanager
+async def lifespan(_app):
+    # Background loops start here and are cancelled on shutdown. Each is its own function: none calls another.
+    worker = asyncio.create_task(document_worker()) if config.DOCUMENT_WORKER_ENABLED else None
+    yield
+    if worker:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+
+
 # docs_url and redoc_url off: they are routes outside the schema, and /openapi.json must list every route.
 # redirect_slashes off, as in the mock: a trailing slash must not become an undeclared 307.
-app = FastAPI(title="Travel Planner", docs_url=None, redoc_url=None, redirect_slashes=False)
+app = FastAPI(title="Travel Planner", docs_url=None, redoc_url=None, redirect_slashes=False, lifespan=lifespan)
 app.include_router(trips.collection)
 app.include_router(trips.readers)
 app.include_router(trips.organizers)
@@ -28,6 +43,8 @@ app.include_router(participants.router)
 app.include_router(itinerary.readers)
 app.include_router(itinerary.editors)
 app.include_router(search.router)
+app.include_router(documents.readers)
+app.include_router(documents.editors)
 
 
 @app.get("/health")

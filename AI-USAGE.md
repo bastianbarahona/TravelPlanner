@@ -19,6 +19,35 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-08: Iteration 5, cross-review
+
+**Way of working:** one brief, `docs/iteration-5-brief.md`, written by the Director and approved by the owner, was the spec for both authors. Claude Sonnet (`dev-principal`) built `app/`. Codex stopped on its first call with a usage limit, before reading a file, so `qa-ux` took its role at once, as `CLAUDE.md` requires: it wrote `tests/` from the brief without reading `app/`, then reviewed `app/`. The Director ran every check.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `app/` | Claude Sonnet | `qa-ux`, read-only, as Codex's stand-in | 0, 0, 2, plus 1 test gap | The 2 lows recorded as limits, one nit fixed, and the gap sent to the tests |
+| `tests/`, first round | `qa-ux` | Claude Sonnet (`qa-lead`) | 0, 3, 8 | All applied. 2 tests added |
+| Mutations A95 to A113 | `qa-ux` | Claude Sonnet (`qa-lead`) | 0, 4, 5 | A114 to A124, a snapshot race test and 2 assertions added. 2 unmutated rules recorded as limits |
+| `ARCHITECTURE.md`, Documents | Claude Sonnet | Director | 0, 0, 3 | Fixed: the intro, the snapshot guarantee, two limits |
+| Recommendations for the 5 decisions | Director | Probes on Postgres 17 | 0 corrections | Approved by the owner |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| `qa-ux` | Its test file used `pytest.raises` without `import pytest`, because a cleanup of its own removed the import. It could not run the tests | Sonnet ran the file: `NameError` in test 10. Reproduced by the Director | Import restored |
+| `qa-ux` | Three checks passed vacuously: a per-item price matched the totals, trip dates matched offer instants, and the `ck_documents_complete` cases did not isolate its conjuncts | `qa-lead`'s review | Counted occurrences and isolated cases |
+| `qa-ux` | No test could catch a source captured at render time instead of request time, the central rule of US-10 | `qa-lead`'s review | A test with the worker off at request time |
+| `qa-ux` | No test could fail if the capture read the trip and the items in separate snapshots | `qa-lead`, reviewing the mutations | A race test that holds `LOCK TABLE itinerary_items`, killing A116 |
+| `qa-ux` | The mutation set had no mutation for the other-trip scope of a document lookup, an IDOR | `qa-lead`, reviewing the mutations | A114 |
+| Claude Sonnet | Reported changing the `ARCHITECTURE.md` intro when its replace had not matched | The Director's reading of the diff | Fixed, and its own report corrected |
+| Director | Its first wait for the Iteration 4 suite to end used a `grep` that never matched, so it ended at once | The process count right after it | A wait on the count of `python` processes |
+| Director | The brief did not foresee that an always-on worker is visible to an older test asserting no `idle in transaction` anywhere in the database | The full suite: 1 failure in `test_app_concurrency.py`, then a probe of 2000 samples, 12 with the worker on and 0 with it off | That test's app starts with the worker off. Iteration 4's poller was warned |
+
+**Tooling:** Codex answered `You've hit your usage limit ... try again at Nov 8th, 2026 12:48 AM`. The same account serves Iteration 4, which was told through the shared session notes.
+
 ### 2026-11-07: Iteration 3, cross-review
 
 **Way of working:** the same as Iteration 2. One brief from the Director was the spec for both authors, and it gained an addendum after the first run. Claude Sonnet built `app/`, and Codex wrote `tests/` from the brief without reading `app/`. The Director measured every recommendation before the owner approved it, and ran every local check of the iteration.

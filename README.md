@@ -45,7 +45,7 @@ to the `app` service's `environment` in `docker-compose.yml`.
 
 ## Web
 
-A single-page frontend in `web/` (React, TypeScript and Vite) served by nginx. Open `http://localhost:8080`, pick an identity in the selector, and plan. The identities are the four test users above, as the tokens `token-ana`, `token-ben`, `token-cam` and `token-dee`. The choice is kept per browser tab. The page calls `/api` on its own origin, and nginx forwards it to the application, so there is no CORS to configure.
+A single-page frontend in `web/` (React, TypeScript and Vite) served by nginx. Open `http://localhost:8080`, pick an identity in the selector, and plan. The trip page also holds the assistant panel: type a question and press Ask. The identities are the four test users above, as the tokens `token-ana`, `token-ben`, `token-cam` and `token-dee`. The choice is kept per browser tab. The page calls `/api` on its own origin, and nginx forwards it to the application, so there is no CORS to configure.
 
 Unit tests, with Vitest and Testing Library (no stack needed):
 
@@ -127,7 +127,7 @@ Every worktree has its own `.venv`. Docker must be running, because the tests st
 ```bash
 python -m venv .venv
 .venv/Scripts/python -m pip install -r tests/requirements.txt   # .venv/bin/python on Linux and macOS
-.venv/Scripts/python -m pytest tests                            # about 13 minutes here
+.venv/Scripts/python -m pytest tests                            # about 28 minutes on the author's Windows machine, 9 on CI
 ```
 
 Real HTTP, with the mock and Postgres as real processes. `tests/compose_smoke.py` runs the compose stack.
@@ -153,6 +153,18 @@ CI (`.github/workflows/ci.yml`) runs on every push, in three jobs:
 
 The contract is immutable. `git diff -- contracts/` must print nothing, and `tests/test_contract_checks.py` fails when the SHA-256 of `contracts/openAPI.json` changes. The browser tests and the mutation check are manual, and are not in CI.
 
+## Known gaps
+
+What the requirements ask for and this delivery does not cover, or covers only in part, with its impact. The 61 deliberate simplifications are in `ARCHITECTURE.md`, "Limits I accept".
+
+| Gap | Impact | Detail |
+|---|---|---|
+| The assistant's model mode (`ASSISTANT_MODE=anthropic`) has never run against the real Anthropic API: no key was available. | Only the deterministic mode is evaluated (E1 to E7 at 100%, in CI). The model mode's cost and score are unmeasured; its error paths are tested against a stub server and without credentials, never against the real API. | `docs/STATUS.md` 1.4, item 17 |
+| The deterministic assistant understands a category only by English keyword, reads no dates, prices or preferences from the question, does not mention an offer's `restrictions`, and cannot search transport (the trip records no origin). | US-11's "explain how options relate to preferences and restrictions" is covered only by the model mode, which is unmeasured. The deterministic answer still relates options to the trip's dates and remaining budget, and discloses the failed transport search. | `ARCHITECTURE.md`, MCP layer and assistant, and its limits |
+| The browser tests (Playwright, 7 cases) and the mutation check run by hand, not in CI. | A regression in the browser workflow or a test that stops failing is caught only when they are run. CI runs the backend suite, the compose smoke and the web unit tests on every push. | `README.md`, Web and Mutation check |
+| Deployment is a proposal (Azure Container Apps), never deployed or tried in Azure. | The proposal is unverified there, and it needs at least the nginx resolver change it names. Local deployment with Docker Compose is what is proven. | `ARCHITECTURE.md`, Deployment (proposed, not deployed) |
+| Some guarantees are enforced in code but have no automated test: a race against the itinerary view, the document worker surviving a database outage, one poll's exception not stopping the reconciliation loop, `SKIP LOCKED` across several processes (probed by hand only), and quote TTLs other than the default 900 s. | Those behaviors rest on code review and manual probes, not on a test that can fail. | `ARCHITECTURE.md`, Guarantees and "Limits I accept"; `docs/STATUS.md` 1.4, item 6 |
+
 ## Deployment (proposed)
 
 Not deployed. The proposal is Azure Container Apps: `web` public, `app` and the provider internal, `migrate` as a job run before each revision, a managed PostgreSQL, secrets in Key Vault. `ARCHITECTURE.md`, Deployment (proposed, not deployed), holds the reasoning, the rejected options and the changes it needs.
@@ -160,8 +172,9 @@ Not deployed. The proposal is Azure Container Apps: `web` public, `app` and the 
 ## More
 
 - `DEMO.md`: the main workflow, and the failure and concurrency scenarios, step by step.
-
 - `ARCHITECTURE.md`: decisions, alternatives, guarantees, limits and risks.
 - `docs/STATUS.md`: where the project stands, iteration by iteration.
 - `provider-mock/README.md`: the provider mock, its fixtures and its control interface.
 - `docs/CONTRACT_NOTES.md`: how the contract is read, and the gaps it leaves.
+- `AI-USAGE.md`: how AI was used and how its output was verified, the development harness with the tools and models it needs, and every case where an assistant was wrong.
+- The development harness: `CLAUDE.md` (rules and roles), `AGENTS.md` (the same rules for Codex), `.claude/agents/` (the subagents) and `.claude/settings.json`. None of it is an application dependency.

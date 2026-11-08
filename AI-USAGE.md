@@ -34,6 +34,7 @@ None of this is an application dependency.
 - **Sonnet wrote steps that do not run as written,** found by Codex: a PATCH body with a literal `V` for the version (invalid JSON), a browser conflict whose page loads after the change it should conflict with, `$TRIP` reused from another scenario, the e2e teardown run from `web/` with repository-relative paths, and a "Proved by" that cites tests covering only part of the scenario. Fixed in the documents.
 - **Sonnet claimed the assistant panel was built** when it was not yet in `main`, from the Director's own brief, which had said "built in a parallel session". Found by Codex, which read `web/src`. Reworded.
 - **Two sessions shared host ports and their messages crossed.** The panel session's Playwright run started its own stack, failed on port 4010, and then ran its 7 tests against the delivery session's clean-clone stack, whose control interface was on. Its resets and faults reached that mock during the first scenario run. Detected by the panel session, which reported it. The scenario run was repeated after both stacks were down. Lesson: a heavy job checks that the ports are free and that its own stack is the one answering, and does not fall back to whatever is on the port.
+- **The Director's first list of known gaps left one out:** the deterministic assistant never mentions an offer's `restrictions`, which US-11 names beside preferences. Found by Codex's read-only review of `README.md`, Known gaps, and confirmed in `app/assistant/assistant.py`. Added to the table.
 
 **The assistant panel, in its parallel session** (`docs/STATUS.md` 2.15). `dev-principal` wrote `web/src`, Codex wrote the tests, and each reviewed the other once. `qa-ux` reviewed the UI.
 
@@ -376,7 +377,7 @@ Every probe file was removed. A search of `C:\DEV` found no other file changed s
 
 **Subagents: not verified at runtime.** `claude -p --agent` answered `Failed to authenticate: OAuth`, and the session's agent tool only knows agents loaded at start. So `model: opus`, `model: sonnet` and `effort: high` are written but unproven. The next session confirms them first.
 
-**The owner's `ARCHITECTURE_NOTES.md`,** checked against the contract, the PRD and `docs/CONTRACT_NOTES.md`. The result is in `ARCHITECTURE.md`.
+**The owner's `ARCHITECTURE_NOTES.md`** (local notes, not in the repository), checked against the contract, the PRD and `docs/CONTRACT_NOTES.md`. The result is in `ARCHITECTURE.md`.
 
 | Claim | Verdict | Outcome |
 |---|---|---|

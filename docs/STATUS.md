@@ -1,10 +1,10 @@
 # Project status and continuity plan
 
-As of `main` at `f25a78f`, with Iterations 1 to 7 merged (6 through pull request #11, 7 through #10) and the CI timeout fix through #12, and CI green on all three jobs. CI on `main` was cancelled once at the old 10-minute bound, and failed once on a race in an Iteration 2 test (2.7).
+As of `main` at `1a9a4d6`, with Iterations 1 to 8 merged (6 through pull request #11, 7 through #10, the assistant panel through #14, 8 through #15) and the CI timeout fix through #12. CI is green on all three jobs at `1a9a4d6` (`contract-tests` 9 minutes, `compose-smoke` 1, `web` under 1). CI on `main` was cancelled once at the old 10-minute bound, and failed once on a race in an Iteration 2 test (2.7).
 
-**Iteration 8 (delivery), 2026-11-08 at about 08:40:** `README.md` setup from a clean clone, `DEMO.md`, the deployment proposal in `ARCHITECTURE.md`, and a clean clone of `main` that ran from the README and reproduced S1 to S7 over the API (2.16). The assistant panel's state is in 2.15.
+**Iteration 8 (delivery), merged on 2026-11-08 at 09:06 through #15, after the panel through #14 at 08:51:** `README.md` setup from a clean clone, `DEMO.md`, the deployment proposal in `ARCHITECTURE.md`, and a clean clone of `main` that ran from the README and reproduced S1 to S7 over the API (2.16). The assistant panel's state is in 2.15.
 
-**Where we stood before Iteration 8:** Iterations 1 to 7 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, trip documents, a read-only MCP layer with an assistant, and a browser interface for every workflow of US-01 to US-10. What is left is the assistant panel in the interface and Iteration 8 (delivery), in two parallel sessions on the second revised plan in 2.2, to the 09:00 deadline. The next sessions start from the prompts in 2.5.
+**Where we stood before Iteration 8:** Iterations 1 to 7 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, trip documents, a read-only MCP layer with an assistant, and a browser interface for every workflow of US-01 to US-10. What was left then, the assistant panel and Iteration 8, ran in two parallel sessions on the second revised plan in 2.2 and is merged. Nothing of the plan to the 09:00 deadline is open. The prompts in 2.5 are historical.
 
 ---
 
@@ -41,16 +41,16 @@ Nothing below exists yet unless marked.
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol with its hardening and Codex's stand-in `qa-ux`, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
 | Backend | ✓ Merged: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, documents, and the MCP layer and assistant (#11) |
-| Frontend | ✓ Merged through #10: `web/`, every workflow of US-01 to US-10. The assistant panel is not built yet (2.13) |
+| Frontend | ✓ Merged through #10: `web/`, every workflow of US-01 to US-10, and the assistant panel through #14 (2.13, 2.15) |
 | Read-only MCP layer and assistant | ✓ Merged through #11 (2.14) |
-| Tests and evaluations | 679 tests in `tests/` (234 for the mock, 445 for the application), 28 of 28 contract responses exercised, and the deterministic evaluations E1 to E7 inside the suite, run by GitHub Actions on every push. `web/`: 20 Vitest tests in CI, and 6 Playwright tests run by hand. The assistant's model mode has never run against the real API (1.4, item 17) |
+| Tests and evaluations | 679 tests in `tests/` (234 for the mock, 445 for the application), 28 of 28 contract responses exercised, and the deterministic evaluations E1 to E7 inside the suite, run by GitHub Actions on every push. `web/`: 25 Vitest tests in CI, and 7 Playwright tests run by hand. The assistant's model mode has never run against the real API (1.4, item 17) |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables. The `BOOKING_POLL_*` variables are application defaults that compose does not pass |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Decisions, guarantees and limits for every built part. The deployment proposal is Iteration 8 |
 | `README.md` | ✓ Setup from a clean clone, run, web, documents, assistant and MCP, evaluations, test, mutation check, checks, and the proposed deployment (2.16) |
 | `DEMO.md` | ✓ Seven scenarios, S1 to S7, each reproduced over the API on a clean clone of `main` (2.16) |
 
-User stories implemented: 12 of 12, all merged. US-01 to US-10 have an API and a browser interface. US-11 and US-12 have the API, the MCP layer and the assistant, with no panel in the interface yet (2.5).
+User stories implemented: 12 of 12, all merged. US-01 to US-10 have an API and a browser interface. US-11 and US-12 have the API, the MCP layer, the assistant and its panel in the interface (2.15).
 
 ### 1.3 Decisions that carry the most weight
 
@@ -129,8 +129,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Merged (2.11) |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | ✓ Merged (2.12) |
 | 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | ✓ Merged through #11 (2.14) |
-| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | ✓ Merged through #10 (2.13). The assistant panel is a session of its own (2.15) |
-| 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | Built, in its own pull request (2.16) |
+| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | ✓ Merged through #10 (2.13), and the assistant panel through #14 (2.15) |
+| 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | ✓ Merged through #15 (2.16) |
 
 **Plan to the deadline,** approved by the owner on 2026-11-07 at 20:40 (UTC-3). The deadline is Sunday 2026-11-08, 09:00.
 
@@ -807,7 +807,7 @@ Built on branch `claude/iteration-6-mcp-assistant-599778`, from `main` at `eab85
 
 Built in a parallel session, in `web/` only, on the second revised plan (2.2), with its own pull request. That session edits no document: it reports its result, tests, controls and AI mistakes to the delivery session, which records them here.
 
-Built on branch `claude/assistant-panel-4ac197`, committed as `9bba422`, in pull request #14 into `main` with Auto-fix on. CI was pending when this was written. It merges before Iteration 8 (2.2). Only `web/` changed: `src/types.ts`, the `AssistantPanel` in `src/sections.tsx`, the ask and its state in `src/TripPage.tsx`, `tests/assistant.test.tsx` (new, 5 tests) and one test added to `e2e/travelplanner.spec.ts`. No `app/` change, no dependency, no `dangerouslySetInnerHTML`.
+Built on branch `claude/assistant-panel-4ac197`, committed as `9bba422`, merged into `main` through pull request #14 as `3c67fb5` at 08:51, with all three CI jobs green on the branch and on `main`. Only `web/` changed: `src/types.ts`, the `AssistantPanel` in `src/sections.tsx`, the ask and its state in `src/TripPage.tsx`, `tests/assistant.test.tsx` (new, 5 tests) and one test added to `e2e/travelplanner.spec.ts`. No `app/` change, no dependency, no `dangerouslySetInnerHTML`.
 
 **Roles as run:** `dev-principal` wrote `web/src`. Codex wrote the tests, in two runs with no usage limit, and reviewed `web/src` read-only: 1 major, fixed. `dev-principal` reviewed Codex's tests: 2 majors and 4 minors, applied except one minor (a `waitFor` on the request). `qa-ux` reviewed the UI: 4 minors, verdict ship; 3 are limits in `ARCHITECTURE.md`, and 1 needs no change.
 
@@ -822,7 +822,7 @@ Built on branch `claude/assistant-panel-4ac197`, committed as `9bba422`, in pull
 
 ### 2.16 Iteration 8 record
 
-Built on branch `claude/iteration-8-delivery-face4f`, from `main` at `9cc75d2` (CI green on all three jobs, as on `f25a78f`). Documentation only: no file under `app/`, `tests/`, `provider-mock/`, `web/` or `contracts/` changed.
+Built on branch `claude/iteration-8-delivery-face4f`, from `main` at `9cc75d2` (CI green on all three jobs, as on `f25a78f`). Committed as `3e7b456`, merged through pull request #15 as `1a9a4d6` at 09:06, after #14. CI was green on the branch. The pull request opened at about 08:53, after the 08:45 target, because the go to commit came then. Documentation only: no file under `app/`, `tests/`, `provider-mock/`, `web/` or `contracts/` changed.
 
 **Decisions taken by the owner on 2026-11-08 at about 08:28 (UTC-3),** all five as recommended.
 
@@ -858,5 +858,17 @@ The script is `i8-demo_smoke.py` in the session group's notes folder, outside th
 **Guide deliverables, checked:** the repository with frontend, backend, mock, MCP layer, assistant and tests; the contract unchanged (`git diff -- contracts/` empty); sample data and steps to reproduce (`provider-mock/README.md`, `DEMO.md`); example configuration (`.env.example`); a README with setup, checks, tests, evaluations and the proposed deployment; `ARCHITECTURE.md`; `DEMO.md`; the harness and `AI-USAGE.md`. Known gaps, named rather than presented as done: model mode never ran against the real API (1.4, item 17), the e2e and the mutation check are manual, and the assistant panel is in its own pull request (2.15).
 
 **Not run in this iteration:** the full suite and the mutation check (no code changed; CI runs the suite on every push), and the browser steps of `DEMO.md` (the scenarios were run over the API; the e2e covers the browser).
+
+**After the merges,** a fresh clone of `main` at `1a9a4d6`, with the panel and this iteration, owner's request at 09:07
+
+| Check | Result |
+|---|---|
+| `git clone --branch main`, then `MOCK_CONTROL_ENABLED=1 docker compose -p tp-final up -d --build --wait` | Every service healthy in 55 s, with the layer cache of the earlier runs |
+| The same scenario script, S1 to S7 over the API | The same result on every row as before the merges |
+| The served web bundle | Holds the panel's "Asking..." and "(tool error)" |
+| `docker compose -p tp-final down -v` | Clean, no container left |
+| GitHub Actions on `main` at `1a9a4d6` | All three jobs green: `contract-tests` 9 minutes, `compose-smoke` 1, `web` under 1 |
+| Documents for the submission, checked at 09:10 | Every file path, test name and `docs/STATUS.md` section cited in the docs exists, and no stale "not built" claim is left. The docs are in English. Fixed: `README.md` now points to `AI-USAGE.md` and the harness (a guide deliverable), and gives the suite's measured duration; `AI-USAGE.md` says the owner's `ARCHITECTURE_NOTES.md` is local |
+| `README.md`, Known gaps, at the owner's request | Five gaps against the requirements, each with its impact and its pointer. Codex, read-only, one round: 1 major (the deterministic assistant never mentions an offer's `restrictions`, which US-11 names; confirmed in `app/assistant/assistant.py`) and 1 minor (a model-mode error path is also tested without credentials). Both applied |
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the deployment bullets that start at "Deployment is a proposal".

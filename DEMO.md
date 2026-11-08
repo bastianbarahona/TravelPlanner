@@ -137,6 +137,6 @@ The assistant answers from the application's MCP tools only. It is read-only, an
 
    E1 to E7 must score 100% (no model, no key). `ANTHROPIC_API_KEY=... .venv/Scripts/python tests/assistant_evals.py --mode anthropic` runs them against Claude and reports scores (billed).
 
-In the browser, once the assistant panel's pull request (#14) is merged: open the trip as `ben`, type the question in the panel's Question field (`data-testid="assistant"`) and press Ask. The button reads "Asking..." and is disabled while it waits. The answer shows as plain text lines, with the mode and each tool call by name, a failed call marked "(tool error)". A 503 `ASSISTANT_UNAVAILABLE` shows in the page's alert with its `requestId`. Proved by `web/tests/assistant.test.tsx` and its e2e case, in pull request #14 (`docs/STATUS.md` 2.15).
+In the browser: open the trip as `ben`, type the question in the panel's Question field (`data-testid="assistant"`) and press Ask. The button reads "Asking..." and is disabled while it waits. The answer shows as plain text lines, with the mode and each tool call by name, a failed call marked "(tool error)". A 503 `ASSISTANT_UNAVAILABLE` shows in the page's alert with its `requestId`. Proved by `web/tests/assistant.test.tsx` and its e2e case, (`docs/STATUS.md` 2.15).
 
 Proved by: `tests/assistant_evals.py` and `tests/test_assistant_evals.py` (E1 to E7, with a control per check), and `tests/test_app_assistant.py`.

@@ -45,7 +45,7 @@ to the `app` service's `environment` in `docker-compose.yml`.
 
 ## Web
 
-A single-page frontend in `web/` (React, TypeScript and Vite) served by nginx. Open `http://localhost:8080`, pick an identity in the selector, and plan. The identities are the four test users above, as the tokens `token-ana`, `token-ben`, `token-cam` and `token-dee`. The choice is kept per browser tab. The page calls `/api` on its own origin, and nginx forwards it to the application, so there is no CORS to configure.
+A single-page frontend in `web/` (React, TypeScript and Vite) served by nginx. Open `http://localhost:8080`, pick an identity in the selector, and plan. The trip page also holds the assistant panel: type a question and press Ask. The identities are the four test users above, as the tokens `token-ana`, `token-ben`, `token-cam` and `token-dee`. The choice is kept per browser tab. The page calls `/api` on its own origin, and nginx forwards it to the application, so there is no CORS to configure.
 
 Unit tests, with Vitest and Testing Library (no stack needed):
 
@@ -127,7 +127,7 @@ Every worktree has its own `.venv`. Docker must be running, because the tests st
 ```bash
 python -m venv .venv
 .venv/Scripts/python -m pip install -r tests/requirements.txt   # .venv/bin/python on Linux and macOS
-.venv/Scripts/python -m pytest tests                            # about 13 minutes here
+.venv/Scripts/python -m pytest tests                            # about 28 minutes on the author's Windows machine, 9 on CI
 ```
 
 Real HTTP, with the mock and Postgres as real processes. `tests/compose_smoke.py` runs the compose stack.
@@ -160,8 +160,9 @@ Not deployed. The proposal is Azure Container Apps: `web` public, `app` and the 
 ## More
 
 - `DEMO.md`: the main workflow, and the failure and concurrency scenarios, step by step.
-
 - `ARCHITECTURE.md`: decisions, alternatives, guarantees, limits and risks.
 - `docs/STATUS.md`: where the project stands, iteration by iteration.
 - `provider-mock/README.md`: the provider mock, its fixtures and its control interface.
 - `docs/CONTRACT_NOTES.md`: how the contract is read, and the gaps it leaves.
+- `AI-USAGE.md`: how AI was used and how its output was verified, the development harness with the tools and models it needs, and every case where an assistant was wrong.
+- The development harness: `CLAUDE.md` (rules and roles), `AGENTS.md` (the same rules for Codex), `.claude/agents/` (the subagents) and `.claude/settings.json`. None of it is an application dependency.

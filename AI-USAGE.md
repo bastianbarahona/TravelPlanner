@@ -376,7 +376,7 @@ Every probe file was removed. A search of `C:\DEV` found no other file changed s
 
 **Subagents: not verified at runtime.** `claude -p --agent` answered `Failed to authenticate: OAuth`, and the session's agent tool only knows agents loaded at start. So `model: opus`, `model: sonnet` and `effort: high` are written but unproven. The next session confirms them first.
 
-**The owner's `ARCHITECTURE_NOTES.md`,** checked against the contract, the PRD and `docs/CONTRACT_NOTES.md`. The result is in `ARCHITECTURE.md`.
+**The owner's `ARCHITECTURE_NOTES.md`** (local notes, not in the repository), checked against the contract, the PRD and `docs/CONTRACT_NOTES.md`. The result is in `ARCHITECTURE.md`.
 
 | Claim | Verdict | Outcome |
 |---|---|---|

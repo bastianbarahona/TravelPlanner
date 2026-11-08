@@ -19,6 +19,42 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-08: Iteration 5, cross-review
+
+**Way of working:** one brief, `docs/iteration-5-brief.md`, written by the Director and approved by the owner, was the spec for both authors. Claude Sonnet (`dev-principal`) built `app/`. Codex stopped on its first call with a usage limit, before reading a file, so `qa-ux` took its role at once, as `CLAUDE.md` requires: it wrote `tests/` from the brief without reading `app/`, then reviewed `app/`. The Director ran every check.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `app/` | Claude Sonnet | `qa-ux`, read-only, as Codex's stand-in | 0, 0, 2, plus 1 test gap | The 2 lows recorded as limits, one nit fixed, and the gap sent to the tests |
+| `tests/`, first round | `qa-ux` | Claude Sonnet (`qa-lead`) | 0, 3, 8 | All applied. 2 tests added |
+| Mutations A95 to A113 | `qa-ux` | Claude Sonnet (`qa-lead`) | 0, 4, 5 | A114 to A124, a snapshot race test and 2 assertions added. 2 unmutated rules recorded as limits |
+| `ARCHITECTURE.md`, Documents | Claude Sonnet | Director | 0, 0, 3 | Fixed: the intro, the snapshot guarantee, two limits |
+| Recommendations for the 5 decisions | Director | Probes on Postgres 17 | 0 corrections | Approved by the owner |
+| Merge with Iteration 4: `app/`, `ARCHITECTURE.md`, `README.md` | Claude Sonnet | Codex, read-only, back from its limit | 0 defects | Accepted |
+| Merge with Iteration 4: `tests/` and mutations A182, A183 | `qa-ux` | Codex, read-only | 0 defects, 2 staging | Staged again before the commit |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| `qa-ux` | Its test file used `pytest.raises` without `import pytest`, because a cleanup of its own removed the import. It could not run the tests | Sonnet ran the file: `NameError` in test 10. Reproduced by the Director | Import restored |
+| `qa-ux` | Three checks passed vacuously: a per-item price matched the totals, trip dates matched offer instants, and the `ck_documents_complete` cases did not isolate its conjuncts | `qa-lead`'s review | Counted occurrences and isolated cases |
+| `qa-ux` | No test could catch a source captured at render time instead of request time, the central rule of US-10 | `qa-lead`'s review | A test with the worker off at request time |
+| `qa-ux` | No test could fail if the capture read the trip and the items in separate snapshots | `qa-lead`, reviewing the mutations | A race test that holds `LOCK TABLE itinerary_items`, killing A116 |
+| `qa-ux` | The mutation set had no mutation for the other-trip scope of a document lookup, an IDOR | `qa-lead`, reviewing the mutations | A114 |
+| Claude Sonnet | Reported changing the `ARCHITECTURE.md` intro when its replace had not matched | The Director's reading of the diff | Fixed, and its own report corrected |
+| Director | Its first wait for the Iteration 4 suite to end used a `grep` that never matched, so it ended at once | The process count right after it | A wait on the count of `python` processes |
+| Director | The brief did not foresee that an always-on worker is visible to an older test asserting no `idle in transaction` anywhere in the database | The full suite: 1 failure in `test_app_concurrency.py`, then a probe of 2000 samples, 12 with the worker on and 0 with it off | That test's app starts with the worker off. Iteration 4's poller was warned |
+| Director | Planned the merge as steps 1 to 8, but missed that Iteration 4's `price_kind(item)` and `budget()` would silently label every document item `estimate`, or raise a 500 for a confirmed booking | A dry run with `git merge-file`, then a read of Iteration 4's `domain/itinerary.py` | Step 3 of the merge, a test, and A182, A183 |
+| Director | Staged the resolved files before `qa-ux` fixed two tests, so the index held the failing versions | Codex's review of the merge (`MM` and `AM` in `git status`) | Staged again before the merge commit |
+| `qa-ux` | Its race test copied an existing offer, which Iteration 4's one-item-per-offer index refuses. Iteration 4's own migration test expected `0003` to stay the head | The Director's first run after the merge: 2 failed | A distinct offer id, and an assertion of one linear head |
+| `qa-ux` | Wrote real newlines into two mutation anchors, a `SyntaxError` | Its own compile check | Escaped |
+| Director | Opened PR #7 stacked on #6, but did not retarget it when #6 merged, so #7 was merged into the Iteration 4 branch and `main` missed Iteration 5. The plan named the step and nobody ran it | `gh pr view` after the owner's merge: #7 based on the Iteration 4 branch | #8, the same head into `main` |
+
+**Tooling:** Codex answered `You've hit your usage limit ... try again at Nov 8th, 2026 12:48 AM`. The same account serves Iteration 4, which was told through the shared session notes.
+
 ### 2026-11-08: Iteration 4, bookings and reconciliation
 
 **Way of working:** one brief, `docs/iteration-4-brief.md`, was the spec for both authors. Claude Sonnet (`dev-principal`) built `app/`. Codex wrote `tests/` from the brief without reading `app/`, and stopped for a usage limit after its first file, so `qa-ux` took Codex's role at once, as `CLAUDE.md` requires, and wrote the rest of the tests and the mutation entries without reading `app/` before its tests existed. Codex came back at 00:48 and reviewed `app/` read-only. The Director probed the two untested decisions on real Postgres before the owner approved them, read `app/` line by line, and ran every suite, mutation and compose check.

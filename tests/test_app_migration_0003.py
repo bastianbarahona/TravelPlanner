@@ -105,7 +105,11 @@ def test_0003_upgrades_a_populated_0002_database_with_no_drift(postgres, empty_d
         assert head.returncode == 0, head.stdout + head.stderr
         check = run_alembic(url, "check")
         assert check.returncode == 0, check.stdout + check.stderr
-        assert "0003" in run_alembic(url, "heads").stdout
+        # Holds for any later head: one linear head, the database at it, and 0003 on the path from 0002.
+        heads = run_alembic(url, "heads").stdout.strip().splitlines()
+        assert len(heads) == 1 and heads[0].endswith("(head)"), heads
+        assert "(head)" in run_alembic(url, "current").stdout
+        assert "0002 -> 0003" in run_alembic(url, "history").stdout
 
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT to_regclass('booking_attempts') IS NOT NULL")) is True

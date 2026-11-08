@@ -14,6 +14,11 @@ PROVIDER_BASE_URL = os.environ["PROVIDER_BASE_URL"]
 PROVIDER_TOKEN = os.environ["PROVIDER_TOKEN"]
 PROVIDER_TIMEOUT_SECONDS = float(os.environ.get("PROVIDER_TIMEOUT_SECONDS", "10"))
 
+# Documents (Iteration 5). "0" leaves every document as stored. The render delay exists for tests only.
+DOCUMENT_WORKER_ENABLED = os.environ.get("DOCUMENT_WORKER_ENABLED", "1") != "0"
+DOCUMENT_LEASE_SECONDS = float(os.environ.get("DOCUMENT_LEASE_SECONDS", "30"))
+DOCUMENT_RENDER_DELAY_SECONDS = float(os.environ.get("DOCUMENT_RENDER_DELAY_SECONDS", "0"))
+
 # Reconciliation of unknown and pending bookings (CONTRACT_NOTES A15). Seconds before the 1st, 2nd, ... check; the last repeats.
 BOOKING_POLL_INTERVALS = [float(seconds) for seconds in os.environ.get("BOOKING_POLL_INTERVALS", "5,10,30,60").split(",")]
 if not all(0 < seconds < 86400 for seconds in BOOKING_POLL_INTERVALS):  # also refuses nan and inf

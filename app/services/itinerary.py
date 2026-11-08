@@ -23,21 +23,28 @@ from app.providers import client
 from app.services.trips import get_trip
 
 
-def itinerary_view(session, caller, trip_id):
-    begin_snapshot(session)  # the version, the trip and the items come from one snapshot
-    trip = get_trip(session, caller, trip_id)
+def read_items(session, trip_id):
+    """The trip's items as {id, position, offer[, booking]}, in position order, inside the caller's transaction.
+    `booking` is the full attempt view of the item's latest attempt, absent when it has none. The views are built here,
+    before the caller's rollback: it expires the entities, and a later attribute read would reload them outside the snapshot."""
     rows = session.execute(
         select(ItineraryItem.id, ItineraryItem.position, ItineraryItem.offer)
         .where(ItineraryItem.trip_id == trip_id)
         .order_by(ItineraryItem.position)
     ).all()
-    # Views are built before the rollback: it expires the entities, and a later attribute read would reload them outside the snapshot.
     latest = {item_id: attempt_view(attempt) for item_id, attempt in attempts.latest(session, trip_id=trip_id).items()}
-    session.rollback()
     items = [{"id": str(row.id), "position": row.position, "offer": row.offer} for row in rows]
     for item in items:
         if (attempt := latest.get(UUID(item["id"]))) is not None:
             item["booking"] = attempt
+    return items
+
+
+def itinerary_view(session, caller, trip_id):
+    begin_snapshot(session)  # the version, the trip, the items and their latest attempts come from one snapshot
+    trip = get_trip(session, caller, trip_id)
+    items = read_items(session, trip_id)
+    session.rollback()
     return view(trip, items, datetime.now(UTC))
 
 

@@ -24,6 +24,24 @@ environment only: `docker-compose.yml` lists the application's and the mock's va
 `BOOKING_POLL_INTERVALS` (`5,10,30,60` seconds) and `BOOKING_POLL_ENABLED` (`1`). To override them under Compose, add them
 to the `app` service's `environment` in `docker-compose.yml`.
 
+## Documents
+
+A trip document is an HTML file generated from a snapshot of the trip taken when it is requested (US-09, US-10). A
+background worker renders it, so a request answers at once and the file arrives a moment later. Routes, all under
+`/trips/{tripId}/documents`:
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST` | editors | `202` with the document, or `200` with the existing one when the trip has not changed |
+| `GET` | members | the trip's documents, newest first |
+| `GET /{documentId}` | members | one document: `waiting`, `in_progress`, `complete` or `failed` |
+| `GET /{documentId}/content` | members | the HTML file, only when `complete`, otherwise `409` |
+| `POST /{documentId}/retry` | editors | puts a `failed` document back in the queue |
+
+Two variables, both in `docker-compose.yml`: `DOCUMENT_WORKER_ENABLED` (`1`; `0` leaves every document as stored) and
+`DOCUMENT_LEASE_SECONDS` (`30`; how long a worker holds a document before another may take it). How the snapshot, the
+file and its hash stay consistent is in `ARCHITECTURE.md`, Documents.
+
 ## Test
 
 Every worktree has its own `.venv`. Docker must be running, because the tests start a real Postgres.
@@ -56,4 +74,4 @@ A survivor is a rule no test protects.
 
 ## Not written yet
 
-Setup beyond Docker, the proposed deployment, the evaluations and the documents module arrive with their iterations.
+Setup beyond Docker, the proposed deployment and the evaluations arrive with their iterations.

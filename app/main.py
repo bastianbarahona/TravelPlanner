@@ -15,11 +15,12 @@ from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException
 
 from app import config
-from app.api import itinerary, participants, search, trips
+from app.api import documents, itinerary, participants, search, trips
 from app.context import request_id
 from app.db.session import engine
 from app.domain.errors import ApiError, not_found
 from app.services import booking
+from app.services.documents import document_worker
 
 logger = logging.getLogger("uvicorn.error")
 BAD_JSON = "The request body is not valid JSON."
@@ -27,14 +28,19 @@ BAD_JSON = "The request body is not valid JSON."
 
 @asynccontextmanager
 async def lifespan(_app):
-    """One reconciliation task per process (CONTRACT_NOTES 2.9). It only reads, and resumes from the database."""
-    task = asyncio.create_task(booking.reconcile_forever()) if config.BOOKING_POLL_ENABLED else None
+    """Two background loops, each its own function and each behind its own flag: none calls the other. Both resume from
+    the database. Booking reconciliation only reads from the provider (CONTRACT_NOTES 2.9); documents only render."""
+    tasks = []
+    if config.BOOKING_POLL_ENABLED:
+        tasks.append(asyncio.create_task(booking.reconcile_forever()))
+    if config.DOCUMENT_WORKER_ENABLED:
+        tasks.append(asyncio.create_task(document_worker()))
     try:
         yield
     finally:
-        if task:
+        for task in tasks:
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 # docs_url and redoc_url off: they are routes outside the schema, and /openapi.json must list every route.
@@ -47,6 +53,8 @@ app.include_router(participants.router)
 app.include_router(itinerary.readers)
 app.include_router(itinerary.editors)
 app.include_router(search.router)
+app.include_router(documents.readers)
+app.include_router(documents.editors)
 
 
 class RequestIdMiddleware:

@@ -61,6 +61,8 @@ services:
       PROVIDER_BASE_URL: http://provider-mock:4010/v1
       PROVIDER_TOKEN: ${PROVIDER_TOKEN:-travel-demo-token}
       PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-10}
+      DOCUMENT_WORKER_ENABLED: ${DOCUMENT_WORKER_ENABLED:-1}
+      DOCUMENT_LEASE_SECONDS: ${DOCUMENT_LEASE_SECONDS:-30}
     depends_on:
       migrate:
         condition: service_completed_successfully

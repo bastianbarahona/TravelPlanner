@@ -1,8 +1,8 @@
 # Project status and continuity plan
 
-As of `main` at `a8b7a33`, with Iteration 3 merged through pull request #5 and CI green on both jobs. Iteration 4 is built on branch `claude/iteration-4-director-407c30`, not committed. Iteration 5 runs in parallel in its own session, on branch `claude/wonderful-matsumoto-ba20cf`.
+As of `main` at `a8b7a33`, with Iteration 3 merged through pull request #5 and CI green on both jobs. Iteration 4 is in pull request #6, at `661ee21`, with CI green. Iteration 5 is on branch `claude/wonderful-matsumoto-ba20cf`: committed as `3e81a3b`, then merged with `661ee21`, for a pull request stacked on #6.
 
-**Where we stand:** Iteration 4 is built, cross-reviewed and verified (2.11). The application books itinerary items, records every attempt before its POST, reconciles `unknown` and `pending` outcomes in the background, and logs one traceable line per provider call. Nothing is committed: the owner decides when. Iteration 4 merges before Iteration 5 (2.11, Merge notes).
+**Where we stand:** Iterations 4 and 5 are built, cross-reviewed and verified (2.11, 2.12), and delivered as pull requests in cascade (2.12, Delivery plan). The application books itinerary items, records every attempt before its POST, reconciles `unknown` and `pending` outcomes in the background, and logs one traceable line per provider call. Iteration 4 merges before Iteration 5 (2.11, Merge notes).
 
 ---
 
@@ -21,11 +21,11 @@ As of `main` at `a8b7a33`, with Iteration 3 merged through pull request #5 and C
 | Team roles, Codex sandbox and contract barrier | Done. Subagent models are confirmed by self-report only, their effort is not visible, and the owner accepted them | `CLAUDE.md`, `AI-USAGE.md` |
 | Ponytail (YAGNI) for Claude and Codex | Done | `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json` |
 | Architecture decisions | Recorded. Modular monolith confirmed by the owner. | `CLAUDE.md`, `ARCHITECTURE.md` |
-| Application data model and API | Done for trips, participants, search, the itinerary, the budget and bookings | `ARCHITECTURE.md`, and Sections 2.8, 2.9 and 2.11 of this file |
+| Application data model and API | Done for trips, participants, search, the itinerary, the budget, bookings and documents | `ARCHITECTURE.md`, and Sections 2.8, 2.9, 2.11 and 2.12 of this file |
 | Provider client | Done: contract-bound parsing, one deadline per request, bounded retries, bookings and by-reference reads | `ARCHITECTURE.md`, Provider client |
 | Bookings and reconciliation | Done: attempts committed before the POST, the 2.8 outcome table, monotonic states, an in-process poller | `ARCHITECTURE.md`, Bookings |
 | MCP tools and assistant | Not started, approach open (1.4, item 2) | |
-| Document generation | Not started | |
+| Document generation | Built in Iteration 5, on the branch stacked on pull request #6 (2.12) | `ARCHITECTURE.md`, Documents |
 | Deployment | Idea only (1.4, item 3) | |
 
 ### 1.2 Development
@@ -37,17 +37,17 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol with its hardening and Codex's stand-in `qa-ux`, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Partial: trips, participants, permissions, persistence, provider client, search, itinerary, budget and readiness, merged. Bookings and reconciliation, built (2.11) |
+| Backend | Partial: trips, participants, permissions, persistence, provider client, search, itinerary, budget and readiness, merged. Bookings and reconciliation, in pull request #6 (2.11). Documents, on the branch stacked on it (2.12) |
 | Frontend | Not started |
 | Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: 234 contract tests for the mock and 377 application tests, run by GitHub Actions on every push |
-| Sample data and example configuration | Partial: mock fixtures and `.env.example` |
+| Tests and evaluations | Partial: 234 contract tests for the mock and 377 application tests, run by GitHub Actions on every push. The documents branch adds its own (2.12) |
+| Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables on the documents branch |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Started: decisions, open proposals, guarantees and limits |
 | `README.md` | Skeleton: run, test, mutation check, links |
 | `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
 
-User stories implemented: 7 of 12 at API level, with no interface yet: US-01, US-03, US-04, US-05, US-06, US-07 and US-08. US-02 is partial: roles cover trips, participants, search, the itinerary and bookings, and its document, status-subscription and assistant permissions arrive with those features.
+User stories implemented: 9 of 12 at API level, with no interface yet: US-01, US-03 to US-10. US-07 and US-08 are in pull request #6, and US-09 and US-10 on the branch stacked on it (2.12). US-02 is partial: roles cover trips, participants, search, the itinerary, bookings and documents, and its status-subscription and assistant permissions arrive with those features.
 
 ### 1.3 Decisions that carry the most weight
 
@@ -119,8 +119,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 1 | Repository base and provider mock | Foundation for US-03, US-07, US-08 | `docker compose up` runs the mock, and contract tests pass against it | ✓ Merged (2.6) |
 | 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | ✓ Merged (2.8) |
 | 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | ✓ Merged (2.9) |
-| 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Built, not committed (2.11) |
-| 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | |
+| 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ In pull request #6, CI green (2.11) |
+| 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | Built and merged with 4 on its branch, for a pull request stacked on #6 (2.12) |
 | 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | |
 | 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | |
 | 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | |
@@ -141,7 +141,7 @@ Process for Iterations 4 to 8: one cross-review round per artifact, and the muta
 
 | Decision | Iteration |
 |---|---|
-| Document format, file storage, and file-to-record consistency | 5 |
+| Document format, file storage, and file-to-record consistency | 5, decided (2.12) |
 | MCP SDK and transport, LLM provider, deterministic mode (1.4, item 2) | 6 |
 | Deployment proposal (1.4, item 3) | 8 |
 
@@ -441,7 +441,6 @@ Also decided: an item with an open or confirmed attempt cannot be deleted, with 
 
 **Done when:** every row of `docs/CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit. The mutation check covers the new rules, `docker compose up` works from clean, CI is green, and this file is updated.
 
-
 ### 2.11 Iteration 4 record
 
 Built on branch `claude/iteration-4-director-407c30`. Not committed: the owner decides when.
@@ -483,7 +482,7 @@ Built on branch `claude/iteration-4-director-407c30`. Not committed: the owner d
 | Image built without cache, then `python tests/compose_smoke.py` | Passes: migration `0003` applies in the `migrate` service, and the app starts with its poller. The smoke does not book: bookings are proven by the suite over real processes |
 | Cross-review | Every artifact was reviewed by an assistant that did not write it (`AI-USAGE.md`). Codex reviewed `app/` once its quota returned |
 | `contracts/openAPI.json` | `git diff -- contracts/` is empty |
-| GitHub Actions | Not run: nothing is committed |
+| GitHub Actions | Both jobs green on `661ee21`, in pull request #6 |
 
 **Merge notes for Iteration 5,** agreed with its session by message:
 
@@ -493,3 +492,113 @@ Built on branch `claude/iteration-4-director-407c30`. Not committed: the owner d
 - `tests/test_app_concurrency.py::test_provider_wait_holds_no_database_transaction` scans `pg_stat_activity` for any `idle in transaction`. Iteration 5 starts its app with `DOCUMENT_WORKER_ENABLED=0`. After the merge it must also set `BOOKING_POLL_ENABLED=0`, or the poller's claim can show up there.
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, including the late click, the pool's bound on simultaneous opens, the untested guard that keeps the loop alive, and booking states outside the trip `version`.
+
+### 2.12 Iteration 5 record
+
+Built in parallel with Iteration 4, on branch `claude/wonderful-matsumoto-ba20cf`, from `main` at `a8b7a33`. Committed alone as `3e81a3b`, then merged with Iteration 4 at `661ee21`, after #6's CI was green. The spec is `docs/iteration-5-brief.md`.
+
+**Decisions taken by the owner on 2026-11-07,** all as recommended, each probed on Postgres 17 first.
+
+| # | Decision | Outcome | Probe |
+|---|---|---|---|
+| 1 | Format | HTML from the standard library, every string through `html.escape`. Downloaded as an attachment with `CSP default-src 'none'` and `nosniff` | None needed |
+| 2 | Storage and consistency | `bytea` in the document row. `ck_documents_complete` and `ck_documents_hash` (`content_sha256 = encode(sha256(content),'hex')`). Every download re-hashes; a mismatch is `failed`, 409, and a retry | The database refused `complete` without content, a wrong hash, and an `UPDATE` of content alone. `hashlib` equals Postgres `sha256()` |
+| 3 | Snapshot | The source is captured at request time in one `REPEATABLE READ` snapshot, stored as JSONB, with nothing that depends on the clock or the caller. `UNIQUE (trip_id, source_sha256)`, with `ON CONFLICT DO NOTHING` after the snapshot | 24 concurrent inserts in `READ COMMITTED`: 1 row, 0 errors |
+| 4 | Jobs | `waiting`, `in_progress`, `complete`, `failed`. A lease with a token, claimed with `SKIP LOCKED`. Every ending write is fenced by the token. 3 attempts. Own loop, `document_worker`, in the lifespan | 4 workers and 200 jobs: 200 distinct claims. An expired lease is reclaimed. The stale write matched 0 rows, and 1 without the token |
+| 5 | API and migration | `/trips/{tripId}/documents`: POST 202 or 200, list, one, `/content`, `/retry`. Migration `0004` with `down_revision = "0002"` until the merge | None needed |
+
+**What exists:**
+
+- `app/`: `services/documents.py`, `api/documents.py`, migration `0004`, the `Document` model, a `lifespan` in `main.py`, three `DOCUMENT_*` variables in `config.py`, and `read_items` extracted from `services/itinerary.py`.
+- `tests/`: `test_app_documents.py`, with 13 tests. `conftest.py` truncates `documents`, and the session app runs with its worker off. `mutation_check.py` adds A95 to A124. `test_app_concurrency.py`: one app starts with the worker off.
+- `ARCHITECTURE.md`: Documents, 6 guarantees, 9 limits.
+- Configuration: `docker-compose.yml` and `.env.example` pass `DOCUMENT_WORKER_ENABLED` and `DOCUMENT_LEASE_SECONDS`. The render delay is test-only and is left out of both.
+
+**At the merge with Iteration 4.** A dry run with `git merge-file` against Iteration 4's working tree at 00:55 gave 14 conflict hunks in 7 files: `app/main.py` 3, `tests/mutation_check.py` 3, `app/db/models.py` 2, `app/services/itinerary.py` 2, `tests/conftest.py` 2, `app/config.py` 1 and `ARCHITECTURE.md` 1. `docs/STATUS.md` and `AI-USAGE.md` merged clean, because Iteration 4 had not edited them yet. Git flags none of the following, so each is a step of the merge commit:
+
+1. **Migration heads.** Set `down_revision` in `0004` to `"0003"`. Probed: without it `alembic heads` lists `0003` and `0004`, and `upgrade head` fails.
+2. **Booking states.** Done by deleting the `booking_states` stub. `read_items` now reads Iteration 4's `attempts.latest(session, trip_id=...)` inside the caller's snapshot, so the itinerary view and the document capture share one read.
+3. **Price kind and budget.** Iteration 4 changed `price_kind(offer)` to `price_kind(item)`, and its `budget()` reads `item["booking"]["booking"]["offer"]` for a confirmed item.
+   - As merged untouched, `capture_source` would label every item `estimate`, and a trip with a confirmed booking would raise `KeyError`, a 500.
+   - The fix: both run on the items from `read_items`, which carry the full attempt view, and the source stores only `{state, clientReference}`. The attempt view's `lastCheckedAt` changes on every poll, so storing it would break the source hash.
+4. **Item price.** The document must show a confirmed item at the accepted price, the budget line, not the snapshot.
+5. **Lifespan.** Start the booking loop beside `document_worker`.
+6. **Tests.**
+   - `conftest.py` truncates both new tables.
+   - `test_provider_wait_holds_no_database_transaction` also passes `BOOKING_POLL_ENABLED=0`.
+   - The mutation numbers stay apart: A95 to A124 here, A125 onward in Iteration 4.
+7. **New tests for the merge.**
+   - A document of a trip with a confirmed booking shows `Booking: confirmed`, the price kind `confirmed` and the accepted price.
+   - Two requests on either side of a poll return the same document.
+8. **Docs.**
+   - `README.md`, created by Iteration 4, gains the document routes and variables.
+   - Iteration 4's record is also numbered 2.11 and merges first, so this record is 2.12.
+   - Iteration 4's `tests/mutation_check.py` runs one known killer first, through `APP_KILLERS`. A95 to A124 work without it. Their killers from this run go there, to make the run faster.
+
+**Delivery plan: pull requests in cascade.** Validated on 2026-11-08 against the repository's settings and the dry run above.
+
+| Step | Action | Check |
+|---|---|---|
+| 1 | Iteration 4 commits, pushes and opens PR A, `claude/iteration-4-director-407c30` into `main`, with Auto-fix on | CI on its push |
+| 2 | Here: commit Iteration 5 alone, then `git merge` the Iteration 4 branch, with steps 1 to 8 above in the merge commit | Full suite, the mutations of the rules the merge touches, compose smoke |
+| 3 | Push, and open PR B into the Iteration 4 branch, with Auto-fix on. Its diff is Iteration 5 plus the merge resolution only | CI runs the combined code on the push (`on: push`) |
+| 4 | Merge PR A with a **merge commit**, as every earlier pull request was. A squash would rewrite the base of PR B | |
+| 5 | `gh pr edit <B> --base main`, before deleting the Iteration 4 branch. `deleteBranchOnMerge` is off, so GitHub does not retarget it | PR B's diff stays Iteration 5 only |
+| 6 | Merge PR B | CI on `main` |
+
+- **Why it is worth it:** the merge, its fixes and its tests start as soon as PR A is pushed, not after it is merged. CI tests the combined code before anything reaches `main`, and that is where items 1 and 3 above break.
+- **What it costs:** every fix commit on PR A needs a new merge into PR B and another CI run.
+- **The alternative:** merge PR A first, then `sync_with_base_branch` and PR B into `main`. It is simpler and loses that overlap.
+
+**As it ran:**
+
+- PR A is #6 and PR B is #7.
+- #6 was merged into `main` as `7a686d5`. Then #7 was merged into the Iteration 4 branch as `20bff82`, without step 5, so `main` did not get Iteration 5.
+- #8 brings the same head, `a3d1af7`, into `main`. Its diff is Iteration 5 and the merge only, it merges clean, and CI is green on that commit. Auto-fix is on.
+- Lesson for the next cascade: retarget PR B as soon as PR A merges, or open PR B against `main` from the start, once PR A is merged.
+
+**Required tests**
+
+| # | Required test | Where, in `tests/test_app_documents.py` |
+|---|---|---|
+| 1 | Waiting, in progress, complete, and recovery after a restart | `test_request_waits_without_a_worker_...` |
+| 2 | Itinerary, costs and booking states, escaped | `test_content_has_every_required_text_...` |
+| 3 | A document is a point in time | `test_a_document_stays_the_trip_as_captured_...`, `test_the_source_is_captured_when_requested_...`, `test_the_source_pairs_a_version_with_its_own_items_...` |
+| 4 | Repeated requests give one document | `test_repeated_requests_return_the_same_document_...` |
+| 5 | An interruption never reports a missing file as ready | `test_a_kill_mid_generation_...`, `test_a_claim_that_makes_the_fourth_attempt_...` |
+| 6 | A stale worker cannot overwrite | `test_a_stolen_lease_fences_...` |
+| 7 | Failure and retry | `test_an_unrenderable_source_fails_...` |
+| 8 | A stored file against its record | `test_a_corrupted_file_is_never_sent_...` |
+| 9 | Permissions | `test_viewer_reads_but_cannot_write_...` |
+| 10 | Constraints | `test_the_database_enforces_the_documents_invariants_by_name` |
+
+**Evidence**
+
+| Check | Result |
+|---|---|
+| Baseline, `python -m pytest tests` before any change | 482 passed in 324 s |
+| `python -m pytest tests/test_app_documents.py` | 13 passed in 97 s. That run overlapped an Iteration 4 job |
+| `alembic upgrade head`, then `alembic check` | No drift (Sonnet's run) |
+| Mutation A95, timed before the full run (rule 10) | Killed in 63 s by the fence test |
+| `python tests/mutation_check.py app A95 … A124` | 30 of 30 killed in 1600 s, with no stale entry and no false kill. Each was killed by the test its rule names. Unmutated, and recorded as limits: the hash conjunct of the corrupt `UPDATE`, `SKIP LOCKED`, and the loop surviving an exception |
+| `python -m pytest tests`, full | 494 passed and 1 failed, in 392 s: `test_provider_wait_holds_no_database_transaction[refresh]`. Its cause: it asserts no `idle in transaction` across the whole database, and the document worker's claim shows there in 12 of 2000 samples with the worker on, and 0 of 2000 with it off. No request held a transaction. Fix: that test's app starts with `DOCUMENT_WORKER_ENABLED=0`. Rerun of `test_app_concurrency.py` and `test_app_documents.py`: 27 passed in 124 s. The full suite was not rerun, so CI is the next full run |
+| `python tests/compose_smoke.py` | Passes, from clean, after the suite |
+| Cross-review | Every artifact was reviewed by an assistant that did not write it (`AI-USAGE.md`) |
+| `contracts/openAPI.json` | Unchanged: `git diff -- contracts/` is empty |
+
+**Merge with Iteration 4,** at `661ee21`, after #6's CI was green on both jobs
+
+| Check | Result |
+|---|---|
+| Conflicts | 21 hunks in 9 files. `app/` and `ARCHITECTURE.md` were resolved by Sonnet, `tests/` by `qa-ux`, and `docs/STATUS.md` and `AI-USAGE.md` by the Director. No conflict marker is left, and `git diff -- contracts/` is empty |
+| `alembic heads` | One head, `0004` |
+| First targeted run | 42 passed and 2 failed, both tests made stale by the merge. Fixed: the race test now inserts a distinct offer id (`uq_itinerary_offer`), and `test_0003_upgrades_...` asserts one linear head and the `0002 -> 0003` step |
+| New tests | A confirmed booking shows its accepted price and stores only `{state, clientReference}`. Two requests either side of a poll return the same document |
+| `python -m pytest tests`, full | 626 passed in 864 s. 28 of 28 contract responses exercised |
+| Mutation anchors | 181 of 181 apply and compile. A123 and A152 were rewritten for the new `lifespan`. A182 and A183 are added for the merge's two new rules |
+| Mutations of the touched files: A95 to A124, A152, A153, A158 to A160, A176, A182, A183 | 38 of 38 killed in 800 s, each by its `APP_KILLERS` test, with no stale entry and no false kill |
+| `python tests/compose_smoke.py` | Passes, from clean, with migrations `0003` and `0004` and both loops |
+| Cross-review | Codex, read-only: no implementation defect. Two staged files were older than the working tree, fixed by staging them before the commit |
+
+**Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the 9 that start at "A document's content lives in Postgres".
+

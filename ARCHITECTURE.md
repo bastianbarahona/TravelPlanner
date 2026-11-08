@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, and documents exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, documents, and the web frontend exist. Anything here about a later iteration is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -161,6 +161,22 @@ Tested on 24 invalid offers: the schema with formats rejected 22, and the two it
 
 **Booking states and prices:** the source reads each item's latest `booking_attempts` row with `attempts.latest`, in the same snapshot as the trip and the items (`read_items`, which the itinerary view uses too). `priceKind` and the budget are computed from the full attempt view, as the itinerary shows them, so a confirmed item is charged the price the provider accepted. The source then keeps only `{state, clientReference}` per item, omitted when there is no attempt: the view's `lastCheckedAt`, `nextStep` and the check count change on every poll, and storing them would change `source_sha256` and break the one-document-per-state guarantee. The file shows each item's price as its budget line, so a confirmed item shows the accepted price, not the snapshot's.
 
+### Frontend
+
+**Decision:** one page in Vite, React 19 and strict TypeScript, with plain `fetch`, plain React state, no router, no UI library and no state library. Confirmed by the owner on 2026-11-08 (`docs/iteration-7-brief.md`). The open trip is the hash `#/trips/<tripId>`, and no hash is the trip list. The trip id from the hash goes through `encodeURIComponent` in every path built from it. Versions are pinned exactly, and chosen so that they run on Node 21, where the owner works, and on Node 24, where Docker and CI build (Vite 8 and Vitest 5 need Node 22 or later).
+
+**Same origin, no CORS:** the browser calls `/api/...`. nginx in Compose and the Vite dev server proxy `/api/` to the application with the prefix stripped, so the application did not change. nginx resolves `app` through Docker's resolver (`127.0.0.11`, cached 10 s) on every request, because a literal host in `proxy_pass` is resolved once at start, and recreating `app` alone could leave `/api` on a stale address, a 502. Probed with the resolver: after `up --force-recreate app`, `/api/trips` still answered 200. The 502 without it was not reproduced. `index.html` is served with `Cache-Control: no-cache`, so a rebuild is never served stale.
+
+**Identity:** a `<select>` of the four test identities, kept in `sessionStorage`, default `ana`. Every request sends `Authorization: Bearer token-<name>`. A download is a `fetch`, then a blob and an object URL, because an `<a href>` cannot send that header.
+
+**The UI shows the server's word:** a state, a `nextStep`, an error `message` and a `requestId` are rendered as the server sent them, and every alert carries its `requestId`. A network failure says "Could not reach the server", and on a write adds that the request may have been received, because a timeout proves nothing about what the server did (`unknown` is our state, not a refusal). Money is a string everywhere: the UI never adds, rounds or parses an amount, and a confirmed item shows the price in its booking. Write controls are hidden by the caller's role, and the server stays the authority.
+
+**Polling and recovery:** every 3 seconds (`POLL_MS`), the UI reads `GET .../items/{itemId}/booking` for each item whose latest attempt is `pending` or `unknown`, and `GET .../documents` while a document is `waiting` or `in_progress`. With nothing open there is no timer. A changed booking state also reads the itinerary again, because the price kind and the budget are computed by the server. On load, on an identity change and on the window `focus` event, everything of the open trip is read again, so the view recovers from a disconnection without relying on any notification. After 75 seconds from the attempt's `createdAt`, a `pending` booking also says the page can be left.
+
+**Stale edits (US-06):** on a 409 with `details.current`, the shown trip or itinerary is replaced by it, and the alert says "Not saved". The edit form keeps only the fields the user typed, shows the typed value or else the server's, and its `PATCH` sends the `version` and those fields alone. Sending all five would let a second Save after a 409 silently revert another user's change to a field the user never touched. A successful save forgets the typed fields. A write on the trip or on the itinerary reads the other view again, because both share one `version`.
+
+**Rejected:** a router (one hash is enough), a UI or state library (the scope guardrails), and WebSocket push (the state endpoints are the source of truth).
+
 ## Proposals recorded, not adopted
 
 From the owner's notes. They belong to later iterations and stay open until then.
@@ -221,6 +237,8 @@ Application, each proven over real HTTP against real Postgres:
 | A document survives a hard kill of the application and finishes after a restart. A worker that lost its lease cannot overwrite the new owner. A document that cannot render ends `failed` after 3 attempts, never `complete`. | `tests/test_app_documents.py` |
 | Viewers list, read and download documents. Only editors and the organizer request or retry. Every document route refuses like the rest. | `tests/test_app_documents.py`, `tests/test_app_permissions.py` |
 | A document's source pairs a `version` with that version's items: an edit committed in the middle of a capture does not tear it. | `tests/test_app_documents.py`, with a test that holds `LOCK TABLE itinerary_items` while the capture waits, then commits an item and a version bump |
+| The UI shows each search status, booking state and document state with the server's own text and `nextStep`, never labels an estimate as confirmed, and sends no write control to a viewer. It adopts `details.current` after a 409 on the trip and on the itinerary, and a second save sends only the typed fields with the new `version`. It reviews refreshed terms before it books, and sends the reviewed revision and price only after "Confirm booking". It polls open bookings and documents once per interval, stops when they close, and reloads on focus. It shows every alert with its `requestId`, field errors beside their fields, and "Could not reach the server" for a network failure. | `web/tests/app.test.tsx`, Vitest with Testing Library and a stubbed `fetch` shaped like the real API |
+| The whole workflow runs in a browser against the compose stack with the provider mock's control interface on: create a trip, search every outcome of the fixtures, add and keep an item through a reload, recover a stale edit, book to `pending`, `confirmed`, `failed`, unavailable and `unknown` then retry, generate and download a document without a reload, and a viewer without write controls. | `web/e2e/travelplanner.spec.ts`, Playwright, run by hand (see Limits I accept) |
 
 ## Limits I accept
 
@@ -263,6 +281,14 @@ Application, each proven over real HTTP against real Postgres:
 - **Two simultaneous downloads of a corrupt file both answer `DOCUMENT_CORRUPT`.** The second one's `details.current` is whatever it reads then. No bytes are ever sent.
 - **The corrupt-download `UPDATE` is fenced on `state = 'complete'` and on the hash it read,** but rendering is deterministic, so a regenerated document has the same hash, and only the state conjunct really fences.
 - **Not covered by the suite:** the worker loop surviving a database outage, `SKIP LOCKED` across several processes (probed only: 4 workers drained 200 jobs, each claimed once), and the cancellation of the worker on shutdown (tests use hard kills).
+
+- **The tests under `web/tests/` are not type-checked.** `web/tsconfig.json` includes only `src`, so `npm run typecheck` and the CI `web` job cover the code and not its tests. Vitest transpiles them without checking types.
+- **The browser aborts a request at 30 seconds,** and nginx reads for up to 60. A `PROVIDER_TIMEOUT_SECONDS` above about 15 can make a slow answer read as "Could not reach the server" although the server is answering. Raise `TIMEOUT_MS` in `web/src/api.ts` with it.
+- **The identity list is hardcoded** to the compose default of `APP_TOKENS` (`token-ana` to `token-dee`). A different `APP_TOKENS` needs a code change, and a real identity provider replaces both.
+- **The e2e suite is manual,** like the mutation check. It is not in CI, because it needs the whole compose stack. It binds the host ports 8080, 8000 and 4010, so it cannot run beside another stack on them.
+- **Images are pinned by tag, not by digest** (`node:24-alpine`, `nginx:1.27-alpine`). A rebuild can pick up a patched image or a changed one. Pin digests when builds must be reproducible.
+- **nginx adds no security headers** (no CSP, no `X-Frame-Options`) beyond what the application sends on its own responses. The page loads one script from its own origin and renders every string as text, so React's escaping is the defense. Add the headers before the page is exposed beyond a demo.
+- **The assistant panel is not built.** US-11 joins after Iteration 6 merges.
 
 The mock's limits are in `docs/STATUS.md`, Section 2.6.
 

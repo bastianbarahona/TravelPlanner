@@ -75,6 +75,23 @@ services:
       retries: 5
       start_period: 5s
 
+  # The browser calls /api on this origin: nginx strips the prefix and forwards to the app, so there is no CORS.
+  web:
+    build:
+      context: ./web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost: busybox wget may try ::1 first, and nginx listens on IPv4 only.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
 volumes:
   provider-mock-data:
   app-db-data:

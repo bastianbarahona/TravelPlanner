@@ -11,7 +11,6 @@ import json
 import subprocess
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
 
 PROVIDER_BASE_URL = "http://localhost:4010"
 APP_BASE_URL = "http://localhost:8000"
@@ -55,13 +54,13 @@ def main():
         status, first = call("/v1/bookings", body, key)
         assert status == 201, f"first booking answered {status}"
 
-        starts_on = datetime.now(timezone.utc).date() + timedelta(days=30)
         trip_body = json.dumps(
             {
-                "destinations": ["Lisbon", "Porto"],
-                "startsOn": starts_on.isoformat(),
-                "endsOn": (starts_on + timedelta(days=3)).isoformat(),
-                "budgetUsd": "420.10",
+                "destinations": ["Lisbon"],
+                "startsOn": "2030-06-10",
+                "endsOn": "2030-06-13",
+                "budgetUsd": "1000.00",
+                "travelers": 2,
             }
         ).encode()
         status, created = call(
@@ -69,6 +68,48 @@ def main():
         )
         assert status == 201, f"trip creation answered {status}"
         trip = json.loads(created)
+
+        search_body = json.dumps({"category": "accommodation"}).encode()
+        status, searched = call(
+            f"/trips/{trip['id']}/search",
+            search_body,
+            base_url=APP_BASE_URL,
+            default_headers=APP_HEADERS,
+        )
+        assert status == 200, f"application search answered {status}"
+        leg = json.loads(searched)["legs"][0]
+        assert leg["status"] == "complete" and leg["options"], "packaged app did not reach the mock"
+
+        bookable = next(option for option in leg["options"] if option["bookable"])
+        add_body = json.dumps(
+            {"version": trip["version"], "offerId": bookable["offer"]["id"]}
+        ).encode()
+        status, itinerary_raw = call(
+            f"/trips/{trip['id']}/itinerary/items",
+            add_body,
+            base_url=APP_BASE_URL,
+            default_headers=APP_HEADERS,
+        )
+        assert status == 201, f"itinerary add answered {status}"
+        itinerary = json.loads(itinerary_raw)
+        assert len(itinerary["items"]) == 1
+        status, current_trip_raw = call(
+            f"/trips/{trip['id']}", base_url=APP_BASE_URL, default_headers=APP_HEADERS
+        )
+        assert status == 200
+        current_trip = json.loads(current_trip_raw)
+        assert current_trip["version"] == trip["version"] + 1
+
+        compose("kill", "app")
+        compose("rm", "-f", "app")
+        compose("up", "-d", "--wait", "app")
+        status, persisted_itinerary = call(
+            f"/trips/{trip['id']}/itinerary",
+            base_url=APP_BASE_URL,
+            default_headers=APP_HEADERS,
+        )
+        assert status == 200, f"itinerary read answered {status} after replacing app"
+        assert json.loads(persisted_itinerary) == itinerary, "itinerary changed after replacing app"
 
         compose("kill")
         compose("down")  # keeps the volume and removes the container
@@ -82,7 +123,7 @@ def main():
             f"/trips/{trip['id']}", base_url=APP_BASE_URL, default_headers=APP_HEADERS
         )
         assert status == 200, f"trip read answered {status}, so the trip was lost"
-        assert json.loads(persisted) == trip, "trip changed after replacing the app and database containers"
+        assert json.loads(persisted) == current_trip, "trip changed after replacing app and database containers"
 
         status, _ = call("/__control/reset", b"")
         assert status == 404, f"control interface answered {status}, it must be off by default"

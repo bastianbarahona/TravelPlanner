@@ -263,8 +263,8 @@ def test_trip_under_way_remains_editable_unless_start_date_changes(app_client, d
     with db_engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO trips (id, starts_on, ends_on, budget_usd, version) "
-                "VALUES (:id, :starts, :ends, 10.00, 1)"
+                "INSERT INTO trips (id, starts_on, ends_on, budget_usd, travelers, version) "
+                "VALUES (:id, :starts, :ends, 10.00, 2, 1)"
             ),
             {"id": trip_id, "starts": starts_on, "ends": today + timedelta(days=5)},
         )

@@ -2,8 +2,9 @@
 
 Each mutation breaks one rule in a temporary source copy, then expects pytest to fail.
 A survivor is a rule no test protects. A stale entry means the source changed and the
-mutation no longer applies. Mock numbers come from provider-mock/README.md; app
-mutations are A01 onward. Pass ``app`` to run only app mutations.
+mutation no longer applies. A false kill means pytest errored instead of detecting the
+changed behavior. Mock numbers come from provider-mock/README.md; app mutations are
+A01 onward. Pass ``app`` to run only app mutations.
 """
 import os
 import re
@@ -11,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -162,7 +164,7 @@ APP_MUTATIONS = [
     ]),
     ("A06", "organizer routes fall back to trip_member", "api/trips.py", [("trip_organizer", "trip_member")]),
     ("A07", "participant routes fall back to trip_member", "api/participants.py", [("trip_organizer", "trip_member")]),
-    ("A08", "trip list stops filtering by caller", "services/trips.py", [('    return trip_views(session, caller, Trip.id.in_(mine))', '    return trip_views(session, caller)')]),
+    ("A08", "trip list stops filtering by caller", "services/trips.py", [('    return _snapshot_views(session, caller, Trip.id.in_(mine))', '    return _snapshot_views(session, caller)')]),
     ("A09", "canonical UUID check is removed", "api/deps.py", [('    if str(trip_id) != tripId.lower():  # UUID() also takes braces, urn: and underscores\n        raise not_found()\n', '')]),
     ("A10", "organizer rows can be changed or removed", "services/participants.py", [('    if role == "organizer":\n', '    if False:\n')]),
     ("A11", "known_user accepts an unknown identity", "api/deps.py", [('    if userId not in IDENTITIES:\n', '    if False:\n')]),
@@ -172,14 +174,16 @@ APP_MUTATIONS = [
     ("A14", "amount accepts one decimal", "money.py", [('[0-9]{2}")', '[0-9]{1,2}")')]),
     ("A15", "amount accepts a leading zero", "money.py", [('r"(0|[1-9][0-9]{0,9})\\.[0-9]{2}"', 'r"[0-9]{1,10}\\.[0-9]{2}"')]),
     ("A16", "amount validation uses match instead of fullmatch", "money.py", [('AMOUNT.fullmatch(text)', 'AMOUNT.match(text)')]),
-    ("A17", "formatted amount loses its two decimals", "money.py", [('    return f"{amount:.2f}"', '    return str(amount).rstrip("0").rstrip(".")')]),
+    ("A17", "formatted amount loses its two decimals", "money.py", [
+        ('    return format(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP), "f")', '    return str(amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)).rstrip("0").rstrip(".")'),
+    ]),
     ("A18", "a truth test skips a zero budget patch", "services/trips.py", [('    if "budget_usd" in changes:\n', '    if parse_amount(changes.get("budget_usd", "0.00")):\n')]),
     # Optimistic versioning and participant concurrency.
     ("A19", "version leaves the guarded UPDATE", "services/trips.py", [('where(Trip.id == trip_id, Trip.version == version)', 'where(Trip.id == trip_id)')]),
     ("A20", "trip version increment is removed", "services/trips.py", [('version=Trip.version + 1', 'version=version')]),
     ("A21", "zero rowcount is ignored", "services/trips.py", [('    if updated.rowcount == 0:\n        raise version_conflict(session, caller, trip_id)\n', '')]),
     ("A22", "destinations are replaced before the version guard", "services/trips.py", [(DESTINATIONS_AFTER_GUARD, DESTINATIONS_BEFORE_GUARD)]),
-    ("A23", "version conflict current state is empty", "services/trips.py", [('{"current": get_trip(session, caller, trip_id)}', '{"current": {}}')]),
+    ("A23", "version conflict current state is empty", "services/trips.py", [('{"current": read_trip(session, caller, trip_id)}', '{"current": {}}')]),
     ("A24", "participant insert loses ON CONFLICT", "services/participants.py", [('        .on_conflict_do_nothing()\n', '')]),
     ("A25", "participant insert becomes check then insert", "services/participants.py", [
         ('    row = session.execute(\n        insert(TripParticipant)', '    if session.scalar(select(TripParticipant.user_id).where(TripParticipant.trip_id == trip_id, TripParticipant.user_id == user_id)) is not None:\n        raise ApiError(409, "PARTICIPANT_EXISTS", "That user is already on the trip.")\n    row = session.execute(\n        insert(TripParticipant)'),
@@ -204,7 +208,221 @@ APP_MUTATIONS = [
     ("A35", "a validation message echoes the input", "main.py", [
         ('    message = error["msg"].removeprefix("Value error, ")', '    message = error["msg"].removeprefix("Value error, ") + repr(error.get("input"))'),
     ]),
+    # Provider contract validation and transport guarantees.
+    ("A36", "provider schemas are not validated", "providers/client.py", [
+        ("        validator.validate(body)\n", ""),
+    ]),
+    ("A37", "provider strings are not cleaned", "providers/client.py", [
+        ("        _clean(body)\n", ""),
+    ]),
+    ("A38", "offer amounts bypass parse_amount", "providers/client.py", [
+        ('    parse_amount(offer["price"]["amount"])  # the schema\'s `$` lets "420.00\\n" through, and it has no upper bound\n', ""),
+    ]),
+    ("A39", "offer instants bypass parse_instant", "providers/client.py", [
+        ("        parse_instant(offer[field])\n", "        str(offer[field])\n"),
+    ]),
+    ("A40", "an undeclared provider status is accepted", "providers/client.py", [
+        ('    if validator is None:\n        raise _invalid(f"undeclared status {response.status_code}")\n', '    if validator is None:\n        validator = Draft202012Validator({"type": "object"})\n'),
+    ]),
+    ("A41", "the whole-call asyncio timeout is removed", "providers/client.py", [
+        ("        async with asyncio.timeout_at(deadline):\n            response = await http.request(method, path, **request)\n", "        response = await http.request(method, path, **request)\n"),
+    ]),
+    ("A42", "offer id is not percent-encoded", "providers/client.py", [
+        ("path = f\"/offers/{quote(offer_id, safe='')}\"", 'path = f"/offers/{offer_id}"'),
+    ]),
+    ("A43", "getOffer makes only one attempt", "providers/client.py", [
+        ("    for attempt in (1, 2):\n", "    for attempt in (1,):\n"),
+    ]),
+    ("A44", "getOffer waits as long as sixty seconds", "providers/client.py", [
+        ("MAX_WAIT = 5  # a longer wait is reported, not slept (A40)", "MAX_WAIT = 60  # mutation: long waits are slept"),
+    ]),
+    ("A45", "getOffer does not retry 503", "providers/client.py", [
+        ('    if error.code == "PROVIDER_UNAVAILABLE":\n        return 2 + random.random()\n', ""),
+    ]),
+    ("A46", "provider 401 is forwarded as 401", "providers/client.py", [
+        ('            return ProviderError(502, "PROVIDER_AUTH", "The provider integration is misconfigured. Try again later.")', '            return ProviderError(401, "PROVIDER_AUTH", "The provider integration is misconfigured. Try again later.")'),
+    ]),
+    # Search state, concurrency and exact request bodies.
+    ("A47", "partial with no offers is reported as empty", "services/search.py", [
+        ('    status = "partial" if result["partial"] else "complete" if offers else "empty"  # A35: partial with no offers is not "empty"', '    status = "complete" if offers else "empty"'),
+    ]),
+    ("A48", "complete and empty search states are swapped", "services/search.py", [
+        ('"complete" if offers else "empty"', '"empty" if offers else "complete"'),
+    ]),
+    ("A49", "search gather drops return_exceptions", "services/search.py", [
+        (", return_exceptions=True", ""),
+    ]),
+    ("A50", "origin is forwarded on non-transport search", "services/search.py", [
+        ('        if body.category == "transport":  # A33: the provider ignores it elsewhere, so it is not sent\n', '        if body.origin is not None:\n'),
+    ]),
+    ("A51", "providerId is sent as null when absent", "services/search.py", [
+        ('        if body.provider_id is not None:  # absent, never null (CONTRACT_NOTES 1.0, rule 1)\n            request["providerId"] = body.provider_id\n', '        request["providerId"] = body.provider_id\n'),
+    ]),
+    ("A52", "search travelers are hard-coded to two", "services/search.py", [
+        ('            "travelers": trip["travelers"],', '            "travelers": 2,'),
+    ]),
+    ("A54", "the search plan keeps its transaction open", "services/search.py", [
+        ("    session.rollback()\n    destinations = body.destinations", "    destinations = body.destinations"),
+    ]),
+    # Itinerary permissions, optimistic locking and refresh.
+    ("A55", "trip_editor lets a viewer through", "api/deps.py", [
+        ('    if access.role not in ("organizer", "editor"):\n', '    if access.role not in ("organizer", "editor", "viewer"):\n'),
+    ]),
+    ("A56", "itinerary guarded update loses its version condition", "services/itinerary.py", [
+        ("where(Trip.id == access.trip_id, Trip.version == version)", "where(Trip.id == access.trip_id)"),
+    ]),
+    ("A57", "add skips the Python version check before the provider call", "services/itinerary.py", [
+        ("    await run_in_threadpool(_precheck, session, access, version)\n", ""),
+    ]),
+    ("A58", "_item drops its concurrent version recheck", "services/itinerary.py", [
+        ("        if str(item_id) == text.lower():\n            _check_version(session, access, version)\n        raise not_found()\n", "        raise not_found()\n"),
+    ]),
+    ("A59", "reorder drops its concurrent version recheck", "services/itinerary.py", [
+        ("        _check_version(session, access, version)  # the items may have changed after the first check: that is a 409\n", ""),
+    ]),
+    ("A60", "refresh bumps the version when the quote is unchanged", "services/itinerary.py", [
+        ('    if fresh != _item(session, access, version, str(item_id))[2]:\n', '    if True:\n'),
+    ]),
+    # Itinerary issue and budget rules.
+    ("A61", "overlap compares timestamp strings", "domain/itinerary.py", [
+        ('    spans = [(parse_instant(item["offer"]["startsAt"]), parse_instant(item["offer"]["endsAt"])) for item in items]', '    spans = [(item["offer"]["startsAt"], item["offer"]["endsAt"]) for item in items]'),
+    ]),
+    ("A62", "touching itinerary items count as overlapping", "domain/itinerary.py", [
+        ("spans[i][0] < spans[j][1] and spans[j][0] < spans[i][1]", "spans[i][0] <= spans[j][1] and spans[j][0] <= spans[i][1]"),
+    ]),
+    ("A63", "accommodation conflicts with activity", "domain/itinerary.py", [
+        ('    return first == second or {first, second} == {"transport", "activity"}', '    return first == second or {first, second} in ({"transport", "activity"}, {"accommodation", "activity"})'),
+    ]),
+    ("A64", "MISSING_ORIGIN condition is removed", "domain/itinerary.py", [
+        ('        if offer["category"] == "transport" and "origin" not in offer:  # A30\n', '        if False:\n'),
+    ]),
+    ("A65", "DESTINATION_WITHOUT_STAY condition is inverted", "domain/itinerary.py", [
+        ("        if key not in stays and key not in seen:\n", "        if key in stays and key not in seen:\n"),
+    ]),
+    ("A66", "PARTY_MISMATCH condition is inverted", "domain/itinerary.py", [
+        ('        if offer["travelers"] != trip["travelers"]:  # A22\n', '        if offer["travelers"] == trip["travelers"]:\n'),
+    ]),
+    ("A67", "PRICE_EXPIRED condition is inverted", "domain/itinerary.py", [
+        ('        if now >= parse_instant(item["offer"]["validUntil"]):\n', '        if now < parse_instant(item["offer"]["validUntil"]):\n'),
+    ]),
+    ("A68", "UNAVAILABLE condition is inverted", "domain/itinerary.py", [
+        ('        if not item["offer"]["available"]:\n', '        if item["offer"]["available"]:\n'),
+    ]),
+    ("A69", "OUTSIDE_TRIP_DATES condition is removed", "domain/itinerary.py", [
+        ('        if parse_instant(offer["startsAt"]).date() < starts_on or parse_instant(offer["endsAt"]).date() > ends_on:\n', '        if False:\n'),
+    ]),
+    ("A70", "SCHEDULE_OVERLAP condition is removed", "domain/itinerary.py", [
+        ("            if _conflicting(*categories) and spans[i][0] < spans[j][1] and spans[j][0] < spans[i][1]:\n", "            if False:\n"),
+    ]),
+    ("A71", "budget difference loses abs", "domain/itinerary.py", [
+        ('"differenceUsd": format_amount(abs(total - limit))', '"differenceUsd": format_amount(total - limit)'),
+    ]),
+    ("A72", "equal budget is over budget", "domain/itinerary.py", [
+        ('"overBudget": total > limit', '"overBudget": total >= limit'),
+    ]),
+    ("A73", "format_amount rounds half even", "money.py", [
+        (", rounding=ROUND_HALF_UP", ""),
+    ]),
+    # Migration and model guarantees.
+    ("A74", "migration itinerary positions are not deferrable", "db/migrations/versions/0002_itinerary_and_party.py", [
+        (", deferrable=True, initially='DEFERRED'", ""),
+    ]),
+    # A75 was dropped as equivalent: the live schema always comes from the migration, not the model metadata.
+    ("A76", "travelers check constraint lower bound is changed", "db/migrations/versions/0002_itinerary_and_party.py", [
+        ("'travelers BETWEEN 1 AND 20'", "'travelers BETWEEN 2 AND 20'"),
+    ]),
+    ("A77", "travelers backfill server default is removed", "db/migrations/versions/0002_itinerary_and_party.py", [
+        (", server_default='1'", ""),
+    ]),
+    # Owner decisions O7, O5 and O8.
+    ("A78", "getOffer bounds each attempt instead of using one deadline", "providers/client.py", [
+        ('            return await _call(GET_OFFER, _check_offer, deadline, "GET", path)',
+         '            return await _call(GET_OFFER, _check_offer, loop.time() + config.PROVIDER_TIMEOUT_SECONDS, "GET", path)'),
+    ]),
+    ("A79", "getOffer retries when the wait does not fit", "providers/client.py", [
+        (" or loop.time() + wait >= deadline", ""),
+    ]),
+    ("A80", "ready skips its database query", "main.py", [
+        ('        with engine.connect() as connection:\n            connection.execute(text("SELECT 1"))\n', '        pass\n'),
+    ]),
+    ("A81", "ready answers 200 on a database error", "main.py", [
+        ('        return error_response(503, "NOT_READY", "The database is not reachable. Try again shortly.")',
+         '        return error_response(200, "NOT_READY", "The database is not reachable. Try again shortly.")'),
+    ]),
+    ("A82", "GET trip loses its consistent snapshot", "api/trips.py", [
+        ("    return trips.read_trip(session, access.user, access.trip_id)",
+         "    return trips.get_trip(session, access.user, access.trip_id)"),
+    ]),
+    ("A83", "refresh keeps its transaction open while asking the provider", "services/itinerary.py", [
+        ("    session.rollback()\n    return item_id, offer\n", "    return item_id, offer\n"),
+    ]),
+    ("A84", "remove skips its first version check", "services/itinerary.py", [
+        ("def remove_item(session, access, version, text):\n    _check_version(session, access, version)\n", "def remove_item(session, access, version, text):\n"),
+    ]),
+    ("A85", "reorder skips its first version check", "services/itinerary.py", [
+        ("def reorder(session, access, version, item_ids):\n    _check_version(session, access, version)\n", "def reorder(session, access, version, item_ids):\n"),
+    ]),
+    ("A86", "refresh skips its first version check", "services/itinerary.py", [
+        ("def _stored_quote(session, access, version, text):\n    _check_version(session, access, version)\n", "def _stored_quote(session, access, version, text):\n"),
+    ]),
+    ("A87", "travelers loses its upper bound", "api/schemas.py", [
+        ("Travelers = Annotated[int, Field(strict=True, ge=1, le=20)]", "Travelers = Annotated[int, Field(strict=True, ge=1)]"),
+    ]),
+    ("A88", "search accepts a twenty-first destination", "services/search.py", [
+        ("MAX_DESTINATIONS = 20", "MAX_DESTINATIONS = 21"),
+    ]),
+    ("A89", "invalid Retry-After waits one second by default", "providers/client.py", [
+        ("DEFAULT_RATE_LIMIT_WAIT = 5  # A40: when Retry-After is absent or invalid", "DEFAULT_RATE_LIMIT_WAIT = 1  # mutation"),
+    ]),
+    ("A90", "search skips the past-start check", "services/search.py", [
+        ("errors = date_errors(starts_on, ends_on, check_start=True)  # A36", "errors = date_errors(starts_on, ends_on, check_start=False)  # mutation"),
+    ]),
+    ("A91", "itinerary write routes fall back to trip_member", "api/itinerary.py", [
+        ("trip_editor", "trip_member"),
+    ]),
+    ("A92", "trip update skips the version recheck before validation failure", "services/trips.py", [
+        ("        if session.scalar(select(Trip.version).where(Trip.id == trip_id)) != version:\n"
+         "            raise version_conflict(session, caller, trip_id)\n", ""),
+    ]),
+    ("A93", "trip list loses its consistent snapshot", "services/trips.py", [
+        ("    return _snapshot_views(session, caller, Trip.id.in_(mine))",
+         "    return trip_views(session, caller, Trip.id.in_(mine))"),
+    ]),
+    ("A94", "Retry-After accepts at most nine digits", "providers/client.py", [
+        ('RETRY_AFTER = re.compile(r"[0-9]{1,4300}")', 'RETRY_AFTER = re.compile(r"[0-9]{1,9}")'),
+    ]),
 ]
+
+
+APP_TEST_MAP = {
+    "api/deps.py": ("test_app_permissions.py", "test_app_itinerary_permissions.py"),
+    "api/itinerary.py": ("test_app_itinerary_permissions.py",),
+    "api/participants.py": ("test_app_permissions.py",),
+    "api/schemas.py": ("test_app_validation.py", "test_app_search_itinerary_validation.py"),
+    "api/trips.py": ("test_app_permissions.py", "test_app_transactions.py"),
+    "db/migrations/versions/0002_itinerary_and_party.py": (
+        "test_app_database.py",
+        "test_app_database_constraints.py",
+    ),
+    "db/models.py": ("test_app_database.py", "test_app_database_constraints.py"),
+    "domain/itinerary.py": ("test_app_itinerary.py",),
+    "domain/rules.py": ("test_app_validation.py",),
+    "main.py": ("test_app_errors.py", "test_app_permissions.py"),
+    "money.py": ("test_app_validation.py", "test_app_itinerary.py"),
+    "providers/client.py": ("test_app_provider.py",),
+    "services/itinerary.py": ("test_app_itinerary.py", "test_app_concurrency.py"),
+    "services/participants.py": ("test_app_permissions.py", "test_app_transactions.py"),
+    "services/search.py": (
+        "test_app_provider.py",
+        "test_app_search_itinerary_validation.py",
+        "test_app_concurrency.py",
+    ),
+    "services/trips.py": (
+        "test_app_transactions.py",
+        "test_app_validation.py",
+        "test_app_permissions.py",
+    ),
+}
 
 
 def run(number, label, filename, replacements, suite="mock"):
@@ -212,8 +430,7 @@ def run(number, label, filename, replacements, suite="mock"):
         copy = Path(workspace)
         source_dir = "app" if suite == "app" else "provider-mock"
         shutil.copytree(ROOT / source_dir, copy / source_dir, ignore=shutil.ignore_patterns("__pycache__"))
-        if suite == "mock":
-            shutil.copytree(ROOT / "contracts", copy / "contracts")
+        shutil.copytree(ROOT / "contracts", copy / "contracts")
         target = copy / source_dir / filename
         source = target.read_text(encoding="utf-8")
         for old, new in replacements:
@@ -221,26 +438,35 @@ def run(number, label, filename, replacements, suite="mock"):
                 return "STALE", ""
             source = source.replace(old, new)
         target.write_text(source, encoding="utf-8")
-        tests = (
-            [str(path) for path in sorted((ROOT / "tests").glob("test_app_*.py"))]
-            if suite == "app"
-            else [str(ROOT / "tests"), "--ignore-glob=*test_app_*.py"]
-        )
         variable = "APP_SOURCE_ROOT" if suite == "app" else "MOCK_APP_DIR"
         source_root = copy if suite == "app" else copy / source_dir
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", *tests, "-x", "-q", "--no-header", "-p", "no:cacheprovider"],
-            env={**os.environ, variable: str(source_root)},
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+
+        def pytest(tests):
+            return subprocess.run(
+                [sys.executable, "-m", "pytest", *tests, "-x", "-q", "--no-header", "-p", "no:cacheprovider"],
+                env={**os.environ, variable: str(source_root)},
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+        if suite == "app":
+            all_tests = [str(path) for path in sorted((ROOT / "tests").glob("test_app_*.py"))]
+            mapped_tests = [str(ROOT / "tests" / name) for name in APP_TEST_MAP.get(filename, ())]
+            result = pytest(mapped_tests or all_tests)
+            if mapped_tests and result.returncode == 0:
+                result = pytest(all_tests)
+        else:
+            result = pytest([str(ROOT / "tests"), "--ignore-glob=*test_app_*.py"])
     if result.returncode == 0:
         return "SURVIVED", ""
-    match = re.search(r"^(?:FAILED|ERROR) tests[/\\](\S+)", result.stdout, re.MULTILINE)
-    return "killed", match.group(1) if match else f"the {suite} did not start"
+    failed = re.search(r"^FAILED tests[/\\](\S+)", result.stdout, re.MULTILINE)
+    if failed:
+        return "killed", failed.group(1)
+    errored = re.search(r"^ERROR tests[/\\](\S+)", result.stdout, re.MULTILINE)
+    return "FALSE KILL", errored.group(1) if errored else f"the {suite} did not start"
 
 
 def main():
@@ -248,16 +474,20 @@ def main():
     app_only = "app" in only
     only = [word for word in only if word != "app"]
     results = []
+    total_seconds = 0.0
     suites = [("app", APP_MUTATIONS)] if app_only else [("mock", MOCK_MUTATIONS), ("app", APP_MUTATIONS)]
     for suite, mutations in suites:
         for number, label, filename, replacements in mutations:
             if only and not any(word == number or word in label for word in only):
                 continue
+            started = time.monotonic()
             outcome, killer = run(number, label, filename, replacements, suite)
+            elapsed = time.monotonic() - started
+            total_seconds += elapsed
             results.append(outcome)
-            print(f"{outcome:9} {number:>3}  {label}  <-  {killer}", flush=True)
+            print(f"{outcome:9} {number:>3}  {label}  <-  {killer}  ({elapsed:.1f}s)", flush=True)
     bad = len(results) - results.count("killed")
-    print(f"\n{results.count('killed')}/{len(results)} mutations killed, {bad} not killed")
+    print(f"\n{results.count('killed')}/{len(results)} mutations killed, {bad} not killed in {total_seconds:.1f}s")
     return 1 if bad else 0
 
 

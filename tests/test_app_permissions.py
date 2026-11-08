@@ -13,29 +13,26 @@ from app_support import (
     APP_SOURCE_ROOT,
     APP_TOKENS,
     app_client as make_app_client,
+    add_participant,
     assert_error,
     assert_validation_error,
     check_app_response,
     create_trip,
+    free_port,
     valid_trip_body,
 )
 from support import HTTP_OPTIONS
 
-PUBLIC_SCHEMA_ROUTES = {("GET", "/health")}
+PUBLIC_SCHEMA_ROUTES = {("GET", "/health"), ("GET", "/ready")}
 PUBLIC_NON_SCHEMA_ROUTES = {("GET", "/openapi.json")}
 
 
-def add_participant(client, trip_id, user_id, role="viewer"):
-    response = client.post(
-        f"/trips/{trip_id}/participants", json={"userId": user_id, "role": role}
+def concrete_path(template, trip_id, user_id="ben", item_id=None):
+    return (
+        template.replace("{tripId}", str(trip_id))
+        .replace("{userId}", user_id)
+        .replace("{itemId}", str(item_id or uuid4()))
     )
-    assert response.status_code == 201, response.text
-    assert response.json() == {"userId": user_id, "role": role}
-    return response.json()
-
-
-def concrete_path(template, trip_id, user_id="ben"):
-    return template.replace("{tripId}", str(trip_id)).replace("{userId}", user_id)
 
 
 def schema_operations(spec):
@@ -46,6 +43,36 @@ def schema_operations(spec):
         for method in item
         if method in methods
     ]
+
+
+def test_ready_answers_for_the_test_database_without_authentication(start_app):
+    application = start_app(PROVIDER_BASE_URL=f"http://127.0.0.1:{free_port()}/v1")
+    with httpx.Client(
+        base_url=application.url,
+        event_hooks={"response": [check_app_response]},
+        **HTTP_OPTIONS,
+    ) as anonymous:
+        response = anonymous.get("/ready")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_unreachable_database_fails_readiness_but_not_liveness(start_app):
+    database_url = (
+        "postgresql+psycopg://travel:travel@127.0.0.1:"
+        f"{free_port()}/travel?connect_timeout=1"
+    )
+    process = start_app(APP_DATABASE_URL=database_url)
+    with httpx.Client(
+        base_url=process.url,
+        event_hooks={"response": [check_app_response]},
+        **HTTP_OPTIONS,
+    ) as anonymous:
+        health = anonymous.get("/health")
+        ready = anonymous.get("/ready")
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert_error(ready, 503, "NOT_READY")
 
 
 def test_openapi_walk_enforces_auth_and_nonparticipant_hiding(application, empty_database):
@@ -136,6 +163,8 @@ print(json.dumps(sorted((method, route.path) for route in iter_route_contexts(ap
                 "postgresql+psycopg://travel:travel@127.0.0.1:1/unreachable?connect_timeout=1"
             ),
             "APP_TOKENS": APP_TOKENS,
+            "PROVIDER_BASE_URL": "http://127.0.0.1:1/v1",
+            "PROVIDER_TOKEN": "token-a",
             "PYTHONPATH": str(APP_SOURCE_ROOT),
         },
         text=True,

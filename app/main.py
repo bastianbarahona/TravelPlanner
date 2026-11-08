@@ -7,9 +7,12 @@ from uuid import uuid4
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
-from app.api import participants, trips
+from app.api import itinerary, participants, search, trips
+from app.db.session import engine
 from app.domain.errors import ApiError, not_found
 
 logger = logging.getLogger("uvicorn.error")
@@ -22,12 +25,26 @@ app.include_router(trips.collection)
 app.include_router(trips.readers)
 app.include_router(trips.organizers)
 app.include_router(participants.router)
+app.include_router(itinerary.readers)
+app.include_router(itinerary.editors)
+app.include_router(search.router)
 
 
 @app.get("/health")
 def health():
-    # ponytail: liveness only, no database query. Add a `SELECT 1` if compose should wait on Postgres reachability too.
+    # Liveness only: the process answers. /ready checks the database, and the compose healthcheck uses it.
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    """Readiness: the database answers. The provider is never called, because the application serves without it."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        return error_response(503, "NOT_READY", "The database is not reachable. Try again shortly.")
+    return {"status": "ready"}
 
 
 def error_response(status, code, message, details=None, headers=None):

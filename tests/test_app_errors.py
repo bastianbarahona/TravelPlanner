@@ -2,6 +2,7 @@
 import httpx
 
 from app_support import (
+    add_participant,
     app_client as make_app_client,
     assert_error,
     assert_validation_error,
@@ -10,7 +11,6 @@ from app_support import (
     valid_trip_body,
 )
 from support import HTTP_OPTIONS
-from test_app_permissions import add_participant
 
 
 def test_401_variants_and_public_health(application, empty_database):

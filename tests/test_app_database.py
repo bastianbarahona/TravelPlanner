@@ -1,11 +1,9 @@
 """Requirement 10: migration parity and database-enforced invariants."""
 from uuid import uuid4
 
-import pytest
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
 
-from app_support import run_alembic
+from app_support import assert_constraint, insert_trip, run_alembic
 
 
 def test_alembic_upgrade_and_check_on_a_fresh_database(postgres, empty_database):
@@ -34,18 +32,11 @@ def test_alembic_upgrade_and_check_on_a_fresh_database(postgres, empty_database)
         admin.dispose()
 
 
-def assert_constraint(db_engine, statement, parameters, name):
-    with pytest.raises(IntegrityError) as caught:
-        with db_engine.begin() as connection:
-            connection.execute(text(statement), parameters)
-    assert caught.value.orig.diag.constraint_name == name
-
-
 def test_ck_trips_dates_refuses_reversed_dates(empty_database):
     assert_constraint(
         empty_database,
-        "INSERT INTO trips (id, starts_on, ends_on, budget_usd, version) "
-        "VALUES (:id, '2030-06-13', '2030-06-10', 1.00, 1)",
+        "INSERT INTO trips (id, starts_on, ends_on, budget_usd, travelers, version) "
+        "VALUES (:id, '2030-06-13', '2030-06-10', 1.00, 2, 1)",
         {"id": uuid4()},
         "ck_trips_dates",
     )
@@ -54,22 +45,11 @@ def test_ck_trips_dates_refuses_reversed_dates(empty_database):
 def test_ck_trips_budget_refuses_negative_amount(empty_database):
     assert_constraint(
         empty_database,
-        "INSERT INTO trips (id, starts_on, ends_on, budget_usd, version) "
-        "VALUES (:id, '2030-06-10', '2030-06-13', -0.01, 1)",
+        "INSERT INTO trips (id, starts_on, ends_on, budget_usd, travelers, version) "
+        "VALUES (:id, '2030-06-10', '2030-06-13', -0.01, 2, 1)",
         {"id": uuid4()},
         "ck_trips_budget",
     )
-
-
-def insert_trip(db_engine, trip_id):
-    with db_engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO trips (id, starts_on, ends_on, budget_usd, version) "
-                "VALUES (:id, '2030-06-10', '2030-06-13', 1.00, 1)"
-            ),
-            {"id": trip_id},
-        )
 
 
 def test_ck_participants_role_refuses_unknown_role(empty_database):

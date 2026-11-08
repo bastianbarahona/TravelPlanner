@@ -869,5 +869,6 @@ The script is `i8-demo_smoke.py` in the session group's notes folder, outside th
 | `docker compose -p tp-final down -v` | Clean, no container left |
 | GitHub Actions on `main` at `1a9a4d6` | All three jobs green: `contract-tests` 9 minutes, `compose-smoke` 1, `web` under 1 |
 | Documents for the submission, checked at 09:10 | Every file path, test name and `docs/STATUS.md` section cited in the docs exists, and no stale "not built" claim is left. The docs are in English. Fixed: `README.md` now points to `AI-USAGE.md` and the harness (a guide deliverable), and gives the suite's measured duration; `AI-USAGE.md` says the owner's `ARCHITECTURE_NOTES.md` is local |
+| `README.md`, Known gaps, at the owner's request | Five gaps against the requirements, each with its impact and its pointer. Codex, read-only, one round: 1 major (the deterministic assistant never mentions an offer's `restrictions`, which US-11 names; confirmed in `app/assistant/assistant.py`) and 1 minor (a model-mode error path is also tested without credentials). Both applied |
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the deployment bullets that start at "Deployment is a proposal".

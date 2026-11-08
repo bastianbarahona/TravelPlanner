@@ -95,3 +95,10 @@ export interface Doc {
   error?: string;
   nextStep: string;
 }
+
+export interface AssistantAnswer {
+  tripId: string;
+  mode: string;
+  answer: string;
+  toolCalls: { name: string; arguments: unknown; isError: boolean }[];
+}

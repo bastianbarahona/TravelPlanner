@@ -2,7 +2,7 @@
 
 As of `main` at `5e3b1c0`, with Iterations 4 and 5 merged through pull requests #6 and #8, and CI green on both jobs. CI failed once on `main` at `7a686d5`, on a race in an Iteration 2 test (2.7).
 
-**Where we stand:** Iterations 1 to 5 are merged. Iteration 6 (MCP layer, assistant and evaluations) is built, verified and committed on its branch, with no pull request yet (2.14). Iteration 7 is in pull request #10. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, and trip documents. What is left is Iteration 6 (MCP and assistant), Iteration 7 (minimal frontend) and Iteration 8 (delivery), on the revised plan to the 09:00 deadline in 2.2. The next sessions start from the prompts in 2.5.
+**Where we stand:** Iterations 1 to 6 are merged, 6 through pull request #11 (2.14). Iteration 7 (minimal frontend) is in pull request #10 (2.13). The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, trip documents, a read-only MCP layer with an assistant, and a browser interface. What is left is the assistant panel in the interface and Iteration 8 (delivery), on the revised plan to the 09:00 deadline in 2.2.
 
 ---
 
@@ -37,9 +37,9 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol with its hardening and Codex's stand-in `qa-ux`, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Done: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, and documents, merged. The MCP layer and the assistant are built in Iteration 6, not merged yet |
-| Frontend | Not started |
-| Read-only MCP layer and assistant | Built in Iteration 6 (2.14), not merged yet |
+| Backend | Done: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, and documents, merged. The MCP layer and the assistant are built in Iteration 6, merged through #11 |
+| Frontend | Built in Iteration 7, in pull request #10: `web/`, every workflow of US-01 to US-10 except the assistant panel (2.13) |
+| Read-only MCP layer and assistant | Built in Iteration 6 (2.14), merged through #11 |
 | Tests and evaluations | Partial: 234 contract tests for the mock and 392 application tests, 626 in all, run by GitHub Actions on every push. Iteration 6 adds the MCP, assistant and evaluation suites, and `tests/assistant_evals.py` (2.14) |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables. The `BOOKING_POLL_*` variables are application defaults that compose does not pass |
 | `AI-USAGE.md` | Started: harness and log |
@@ -47,7 +47,7 @@ Nothing below exists yet unless marked.
 | `README.md` | Skeleton: run, test, mutation check, links |
 | `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
 
-User stories implemented: 9 of 12 at API level are merged: US-01 and US-03 to US-10. Iteration 6 builds the other three, not merged yet: US-11, US-12, and the assistant half of US-02 (2.14). The interface is Iteration 7.
+User stories implemented: 12 of 12 at API level: US-01 to US-10 merged before Iteration 6, and US-11, US-12 and the assistant half of US-02 merged through #11 (2.14). Iteration 7 adds the browser interface for US-01 to US-10, in pull request #10 (2.13). The assistant panel follows.
 
 ### 1.3 Decisions that carry the most weight
 
@@ -85,6 +85,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 12 | Closed on 2026-11-08: four pairs of orphan `uvicorn` processes from this worktree's early test runs had a dead parent. Sonnet's `Stop-Process` was denied by the permission classifier, so it was left to the owner. At 02:05 none of this worktree's processes remained. | Nothing |
 | 13 | `tests/test_offers.py::test_suppliers_are_queried_concurrently_within_one_deadline` flaked once under load: 0.391 s against a 0.4 s floor, Windows timer resolution. The mock did not change. 2.6 already lists this test as a wall-time risk. | Nothing yet |
 | 14 | CI failed once on `main` at `7a686d5` (2.7). A two-line test fix, validated by the owner, is in the close-out pull request of Iteration 4. | Nothing: `main` is green at `5e3b1c0` |
+| 15 | Iteration 7's baseline suite failed 1 of 626 under load: `test_app_documents.py::test_a_document_stays_the_trip_as_captured_...`, `WinError 10054` on a pooled connection to the mock's control interface, while npm and Codex ran beside it. Alone it passed in 20 s. Same family as item 13 and 2.7: a reused keep-alive connection. | Nothing yet |
+| 16 | Codex hit its usage limit at about 04:55 in Iteration 7 (reset at 05:49), in both runs, and `qa-ux` took its role. Iteration 6 shares the account. | Nothing: `qa-ux` covered it |
 
 ### 1.5 Housekeeping
 
@@ -122,8 +124,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | ✓ Merged (2.9) |
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Merged (2.11) |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | ✓ Merged (2.12) |
-| 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | Built and verified (2.14), committed on its branch |
-| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | |
+| 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | ✓ Merged through #11 (2.14) |
+| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | In pull request #10 (2.13). The assistant panel follows |
 | 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | |
 
 **Plan to the deadline,** approved by the owner on 2026-11-07 at 20:40 (UTC-3). The deadline is Sunday 2026-11-08, 09:00.
@@ -657,6 +659,60 @@ Built in parallel with Iteration 4, on branch `claude/wonderful-matsumoto-ba20cf
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the 9 that start at "A document's content lives in Postgres".
 
+
+### 2.13 Iteration 7 record
+
+Built in parallel with Iteration 6, on branch `claude/iteration-7-minimal-frontend-b2f8c7`, from `main` at `eab8575` (CI green). Committed as `f57d67e`, in pull request #10 with Auto-fix on, then merged with `main` after #11. The spec is `docs/iteration-7-brief.md`.
+
+**Decisions taken by the owner on 2026-11-08 at about 04:40 (UTC-3),** all five as recommended. The probes behind them: the app has no CORS and no `/me`; a download needs the bearer header; the mock's fixtures and its fault control reach every search and booking state; Node 21, Docker, and `node:24-alpine` were on the machine.
+
+| # | Decision | Outcome |
+|---|---|---|
+| 1 | Stack | Vite, React 19, strict TypeScript, plain `fetch`, one page, the hash `#/trips/<id>`. No router, UI or state library |
+| 2 | API and identity | Same origin: nginx (and the Vite dev server) proxies `/api/` with the prefix stripped, through Docker's resolver. No `app/` change. Four test identities in `sessionStorage`. Download by `fetch` and blob |
+| 3 | Failure states | The server's state, `nextStep`, message and `requestId` verbatim. A 409 adopts `details.current`, and an edit sends only the typed fields. Book refreshes, shows the terms, and books only on "Confirm booking" |
+| 4 | Polling | Every 3 s, only while a booking is `pending` or `unknown` or a document `waiting` or `in_progress`. A full reload on load, focus and identity change |
+| 5 | Compose and tests | A `web` service (node build, nginx) on 8080. Vitest in `web/tests`, in a new CI job `web`. Playwright in `web/e2e`, manual, against compose with the mock's control on |
+
+**What exists:** `web/` (`src/`, `tests/`, `e2e/`, `Dockerfile`, `nginx.conf`, `package.json` with exact pins and its lockfile), the `web` service in `docker-compose.yml`, the `web` job in `.github/workflows/ci.yml`, `docs/iteration-7-brief.md`, the Frontend section of `ARCHITECTURE.md` with 2 guarantees and 7 limits, a Web section in `README.md`, and the log entry in `AI-USAGE.md`. No migration, no mutation id, nothing in `app/`, `tests/`, `provider-mock/` or `contracts/`.
+
+**Roles as run:** Claude Sonnet wrote `web/` except its tests. Codex wrote `web/tests` and `web/e2e` from the brief. Codex hit its usage limit in its review and in its fix round, and `qa-ux` took its role at once: it fixed the tests, finished the code review, and reviewed the UI and UX.
+
+**Required tests**
+
+| # | Required test | Where |
+|---|---|---|
+| 1 | Complete, partial, partial with no options, empty and failed searches each show their own text | `web/tests/app.test.tsx`, `web/e2e/travelplanner.spec.ts` |
+| 2 | Search options are never labelled confirmed | `app.test.tsx` |
+| 3 | A 409 adopts `details.current`, and the next write sends the new `version` and only the typed fields | `app.test.tsx`, the e2e stale-edit test |
+| 4 | Each booking state shows its text, `nextStep` and only its action, and `unknown` is never "Failed" | `app.test.tsx`, the e2e booking test |
+| 5 | Book refreshes, reviews, and sends the reviewed terms only on confirm; a changed price shows a notice; an unavailable offer cannot be confirmed; `TERMS_CHANGED` reopens the review | `app.test.tsx`, the e2e booking test |
+| 6 | Polling starts and stops with open states, and `focus` reloads; the 75 s pending release counts from `createdAt` | `app.test.tsx` (fake timers), the e2e booking and document tests |
+| 7 | Documents: download only when complete, retry only when failed, a corrupt file is an alert | `app.test.tsx`, the e2e document test |
+| 8 | Errors: field errors, "Could not reach the server", the `requestId` in every alert | `app.test.tsx` |
+| 9 | A viewer sees no write control | `app.test.tsx`, the e2e viewer test |
+| 10 | An effect cleanup is never a Promise (the e2e crash) | `app.test.tsx` |
+
+**Evidence**
+
+| Check | Result |
+|---|---|
+| `python -m pytest tests`, baseline before any change | 625 passed and 1 failed in 1030 s. The failure was `WinError 10054` on a mock control connection under load (1.4, item 15); alone it passed in 20 s. 28 of 28 contract responses exercised. No file under `app/` or `tests/` changed afterwards, so the suite was not rerun |
+| `npx vitest run` in `web/` | 20 of 20 passed |
+| Vitest controls | Run by `qa-ux` on a scratch copy of `web/src`, one single-line mutant at a time: 15 mutants, each killed by the test it names (M13 survived first and got a fixture fix). The lost-update mutant (`bodyOf(_values)`) fails with the stale `budgetUsd` in the PATCH. The Promise-cleanup mutant fails with `destroy is not a function` |
+| `npm run typecheck`, `npm run build` | Pass |
+| Playwright e2e on the compose stack, final image | 6 of 6 passed in 18 s |
+| e2e controls | A natural one: the image before the effect fix failed 3 of 6 (stale edit, booking, viewer) with a blank page. Deliberate ones, on a mutant copy served on 8080: partial text hidden without options, the budget verdict inverted and document polling off failed exactly the search, create and document tests, each on its own assertion |
+| nginx probes | `/api/trips` 200 with a token and 401 without; the query string kept; SPA fallback 200; `index.html` with `Cache-Control: no-cache`; `/api` still 200 after `up --force-recreate app` |
+| `python tests/compose_smoke.py`, from clean | Passes, now building and waiting for `web` too |
+| GitHub Actions | All three jobs green on `f57d67e` in #10, the new `web` job included |
+| `contracts/openAPI.json` | `git diff -- contracts/` is empty |
+
+**Coordination with Iteration 6:** by session message. Heavy jobs took turns: Iteration 6's baseline suite, then this one's, then Iteration 6's targeted run, then this one's compose and e2e and the smoke. Iteration 6 sent the assistant's route: `POST /trips/{tripId}/assistant {question}` answers `{tripId, mode, answer, toolCalls[{name, arguments, isError}]}`, or 503 `ASSISTANT_UNAVAILABLE`. Both edit `README.md`, `ARCHITECTURE.md`, `AI-USAGE.md` (each adds at the top, a plain conflict), `docker-compose.yml` and this file (6 adds 2.14).
+
+**Next:** the assistant panel, now that Iteration 6 is merged: a question box on the trip page that shows `answer`, `mode`, each tool call with `isError`, and a 503 as an alert.
+
+**Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the 7 that start at "The tests under `web/tests/` are not type-checked".
 
 ### 2.14 Iteration 6 record
 

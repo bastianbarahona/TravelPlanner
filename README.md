@@ -13,6 +13,7 @@ This is a skeleton, written in Iteration 4. Each later iteration fills in its se
 docker compose up --build
 ```
 
+- Web: `http://localhost:8080` (`WEB_PORT` changes it)
 - Application: `http://localhost:8000` (`GET /ready`, `GET /openapi.json`)
 - Provider mock: `http://localhost:4010/v1`, token `travel-demo-token`
 - Test identities (there is no users table): `token-ana`, `token-ben`, `token-cam` and `token-dee`, as the users `ana`,
@@ -23,6 +24,30 @@ environment only: `docker-compose.yml` lists the application's and the mock's va
 (`provider-mock/README.md`). The booking loop has two application defaults that Compose does not set,
 `BOOKING_POLL_INTERVALS` (`5,10,30,60` seconds) and `BOOKING_POLL_ENABLED` (`1`). To override them under Compose, add them
 to the `app` service's `environment` in `docker-compose.yml`.
+
+## Web
+
+A single-page frontend in `web/` (React, TypeScript and Vite) served by nginx. Open `http://localhost:8080`, pick an identity in the selector, and plan. The identities are the four test users above, as the tokens `token-ana`, `token-ben`, `token-cam` and `token-dee`. The choice is kept per browser tab. The page calls `/api` on its own origin, and nginx forwards it to the application, so there is no CORS to configure.
+
+Unit tests, with Vitest and Testing Library (no stack needed):
+
+```bash
+cd web
+npm ci
+npm test            # also: npm run typecheck, npm run build
+```
+
+Browser tests, with Playwright, against a separate compose stack whose provider mock has its control interface on. They need the host ports 8080, 8000 and 4010 free:
+
+```bash
+docker compose -p travelplanner-e2e -f docker-compose.yml -f web/e2e/compose.e2e.yml up -d --build --wait
+cd web
+npx playwright install chromium   # once
+npm run e2e
+docker compose -p travelplanner-e2e down -v   # from the repository root
+```
+
+For development, `npm run dev` in `web/` serves the page with hot reload and proxies `/api` to `http://localhost:8000`, so start the application first (`docker compose up --build`, or the `app` service alone).
 
 ## Documents
 

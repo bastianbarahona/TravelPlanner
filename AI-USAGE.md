@@ -19,6 +19,32 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-08: Iteration 7, minimal frontend
+
+**Way of working:** one brief, `docs/iteration-7-brief.md`, with a test contract of visible texts, labels and `data-testid`s, was the spec for both authors. Claude Sonnet (`dev-principal`) wrote `web/` except the tests. Codex wrote `web/tests` and `web/e2e` from the brief without reading `web/src`. Codex then hit its usage limit in both its review of `web/src` and its fix of its own tests, and changed nothing, so `qa-ux` took its role at once: it fixed the tests and finished the code review. `qa-ux` also reviewed the UI and UX. The Director ran every check.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `web/tests`, `web/e2e` | Codex | Claude Sonnet | 0, 4, 9 | 3 Vitest failures traced to the tests. All applied by `qa-ux`, 10 tests added |
+| `web/src`, UI and UX | Claude Sonnet | `qa-ux` | 1, 8, 5 | All 14 fixed. The blocker got a test with a control |
+| `web/src`, nginx, Dockerfile, compose, CI | Claude Sonnet | Codex (cut off by its limit), then `qa-ux` | 0, 1, 8 | 4 fixed, the rest recorded as limits |
+| `web/` as built | Sonnet and `qa-ux` | The Playwright e2e on the real stack | 1 crash | Fixed, with a Vitest test and a control |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| Codex | Search `warnings` as plain strings. The contract's `SupplierWarning` is `{providerId, code, message}` | Sonnet ran the tests against a correct UI. Reproduced by the Director against `contracts/openAPI.json:844` | Objects, and the warning text asserted |
+| Codex | Flushed effects with ten `await Promise.resolve()` turns, which never resolve a `Response` body. No UI could pass that test | Sonnet measured 200 turns, with and without fake timers | `vi.advanceTimersByTimeAsync(0)` |
+| Codex | Five assertions could not fail on the defect they named: a viewer test with nothing to hide, `"Confirmed"` matching `"Confirmed price"`, a static itinerary stub | Sonnet's review | Strengthened, each killed by a single-line mutant |
+| Claude Sonnet | The edit form resent all five fields after a 409, so a second Save silently reverted another user's change: the lost update US-06 forbids. The brief did not name it, and no test caught it | `qa-ux`'s UI review, confirmed by the Director's reading of `TripForm.tsx` | The PATCH sends only typed fields. A test, killed when the PATCH sends the stale budget |
+| Claude Sonnet | `useEffect(() => ref.current?.scrollIntoView?.(...))` returned the call's result. Chromium 158 returns a Promise from `scrollIntoView`, React called it as a cleanup, and the page went blank on the next unmount. jsdom has no `scrollIntoView`, so Vitest passed | Playwright: 3 of 6 failed with a blank page. The Director reproduced it on the Vite dev server: `destroy is not a function` | Block bodies in every effect. A Vitest test that stubs the Promise, killed by the old line |
+| Director | The brief's test list had no case for a second save after a 409, the scenario US-06 exists for | `qa-ux`'s review | Added to the tests |
+
+**Tooling:** Codex answered `You've hit your usage limit ... try again at 5:49 AM` in both runs, after reading the files. Iteration 6 shares the account.
+
 ### 2026-11-08: Iteration 6, MCP layer, assistant and evaluations
 
 **Way of working:** one brief, `docs/iteration-6-brief.md`, was the spec for both authors. The owner approved its five decisions (D1 to D5), after the Director probed the MCP SDK first: the transport, the token reaching a tool, `ToolError` texts, and the in-process client carrying no headers. Claude Sonnet (`dev-principal`) built `app/`. Codex wrote `tests/` from the brief without reading `app/`, then reviewed `app/` read-only. Codex hit its usage limit on its second test round, so `qa-ux` took its role at once and fixed and extended the tests and wrote mutations A184 to A222. The Director reproduced every app finding before routing it, and ran every check.

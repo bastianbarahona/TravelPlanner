@@ -1,0 +1,4 @@
+services:
+  provider-mock:
+    environment:
+      MOCK_CONTROL_ENABLED: "1"

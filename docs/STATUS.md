@@ -1,8 +1,8 @@
 # Project status and continuity plan
 
-As of `main` at `a8b7a33`, with Iteration 3 merged through pull request #5 and CI green on both jobs. Iteration 4 is in pull request #6, at `661ee21`, with CI green. Iteration 5 is on branch `claude/wonderful-matsumoto-ba20cf`: committed as `3e81a3b`, then merged with `661ee21`, for a pull request stacked on #6.
+As of `main` at `5e3b1c0`, with Iterations 4 and 5 merged through pull requests #6 and #8, and CI green on both jobs. CI failed once on `main` at `7a686d5`, on a race in an Iteration 2 test (2.7).
 
-**Where we stand:** Iterations 4 and 5 are built, cross-reviewed and verified (2.11, 2.12), and delivered as pull requests in cascade (2.12, Delivery plan). The application books itinerary items, records every attempt before its POST, reconciles `unknown` and `pending` outcomes in the background, and logs one traceable line per provider call. Iteration 4 merges before Iteration 5 (2.11, Merge notes).
+**Where we stand:** Iterations 1 to 5 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, and trip documents. What is left is Iteration 6 (MCP and assistant), Iteration 7 (minimal frontend) and Iteration 8 (delivery), on the revised plan to the 09:00 deadline in 2.2. The next sessions start from the prompts in 2.5.
 
 ---
 
@@ -25,7 +25,7 @@ As of `main` at `a8b7a33`, with Iteration 3 merged through pull request #5 and C
 | Provider client | Done: contract-bound parsing, one deadline per request, bounded retries, bookings and by-reference reads | `ARCHITECTURE.md`, Provider client |
 | Bookings and reconciliation | Done: attempts committed before the POST, the 2.8 outcome table, monotonic states, an in-process poller | `ARCHITECTURE.md`, Bookings |
 | MCP tools and assistant | Not started, approach open (1.4, item 2) | |
-| Document generation | Built in Iteration 5, on the branch stacked on pull request #6 (2.12) | `ARCHITECTURE.md`, Documents |
+| Document generation | Done: HTML in `bytea`, captured in one snapshot, a leased and fenced worker, re-hashed on download (2.12) | `ARCHITECTURE.md`, Documents |
 | Deployment | Idea only (1.4, item 3) | |
 
 ### 1.2 Development
@@ -37,17 +37,17 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol with its hardening and Codex's stand-in `qa-ux`, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Partial: trips, participants, permissions, persistence, provider client, search, itinerary, budget and readiness, merged. Bookings and reconciliation, in pull request #6 (2.11). Documents, on the branch stacked on it (2.12) |
+| Backend | Partial: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, and documents, merged. The MCP layer is Iteration 6 |
 | Frontend | Not started |
 | Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: 234 contract tests for the mock and 377 application tests, run by GitHub Actions on every push. The documents branch adds its own (2.12) |
-| Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables on the documents branch |
+| Tests and evaluations | Partial: 234 contract tests for the mock and 392 application tests, 626 in all, run by GitHub Actions on every push. Assistant evaluations arrive with Iteration 6 |
+| Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables. The `BOOKING_POLL_*` variables are application defaults that compose does not pass |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Started: decisions, open proposals, guarantees and limits |
 | `README.md` | Skeleton: run, test, mutation check, links |
 | `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
 
-User stories implemented: 9 of 12 at API level, with no interface yet: US-01, US-03 to US-10. US-07 and US-08 are in pull request #6, and US-09 and US-10 on the branch stacked on it (2.12). US-02 is partial: roles cover trips, participants, search, the itinerary, bookings and documents, and its status-subscription and assistant permissions arrive with those features.
+User stories implemented: 9 of 12 at API level, all merged, with no interface yet: US-01 and US-03 to US-10. US-02 is partial: roles cover trips, participants, search, the itinerary, bookings and documents, and its assistant permissions arrive with Iteration 6. US-11 and US-12 are Iteration 6.
 
 ### 1.3 Decisions that carry the most weight
 
@@ -84,6 +84,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 11 | Closed on 2026-11-07: `clink` in a fresh PAL starts in `C:\DEV\TravelPlanner` and is denied outside it. It still writes in the main checkout and its `contracts/`, so `CLAUDE.md` keeps it banned here (`AI-USAGE.md`). | Nothing |
 | 12 | Closed on 2026-11-08: four pairs of orphan `uvicorn` processes from this worktree's early test runs had a dead parent. Sonnet's `Stop-Process` was denied by the permission classifier, so it was left to the owner. At 02:05 none of this worktree's processes remained. | Nothing |
 | 13 | `tests/test_offers.py::test_suppliers_are_queried_concurrently_within_one_deadline` flaked once under load: 0.391 s against a 0.4 s floor, Windows timer resolution. The mock did not change. 2.6 already lists this test as a wall-time risk. | Nothing yet |
+| 14 | CI failed once on `main` at `7a686d5` (2.7). A two-line test fix, validated by the owner, is in the close-out pull request of Iteration 4. | Nothing: `main` is green at `5e3b1c0` |
 
 ### 1.5 Housekeeping
 
@@ -98,7 +99,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 
 ### 2.1 Working rules for every iteration
 
-1. Start each iteration in a clean context, from the prompt in 2.5. Two iterations may run in parallel sessions on one machine: they agree on migration numbers, mutation ids and the order of heavy jobs by session message, as Iterations 4 and 5 did.
+1. Start each iteration in a clean context, from its prompt in 2.5. Two iterations may run in parallel sessions on one machine: they agree on migration numbers, mutation ids and the order of heavy jobs by session message, as Iterations 4 and 5 did.
 2. Read the contract and the notes before touching provider-facing code.
 3. Resolve the iteration's open design decisions first, in small batches, each with a recommendation.
 4. Test a recommendation before accepting it, whether it comes from a person or from an AI.
@@ -119,8 +120,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 1 | Repository base and provider mock | Foundation for US-03, US-07, US-08 | `docker compose up` runs the mock, and contract tests pass against it | ✓ Merged (2.6) |
 | 2 | Application core: persistence, test identities, trips, permissions | US-01, US-02 | Trips survive a restart, and nonparticipants are refused on every route | ✓ Merged (2.8) |
 | 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | ✓ Merged (2.9) |
-| 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ In pull request #6, CI green (2.11) |
-| 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | Built and merged with 4 on its branch, for a pull request stacked on #6 (2.12) |
+| 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Merged (2.11) |
+| 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | ✓ Merged (2.12) |
 | 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | |
 | 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | |
 | 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | |
@@ -134,6 +135,17 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 02:30 to 05:00 | 5 and 6 in parallel, each in its own session |
 | 05:00 to 07:30 | 7, minimal frontend |
 | 07:30 to 08:45 | 8, delivery |
+
+**Revised plan, proposed by the Director at 03:40 (UTC-3) and approved by the owner at 03:50.** Iteration 4 ran past its block, and Iteration 6 has not started, so 6 and 7 run in parallel. The frontend needs only the merged API. The assistant panel joins it after 6 merges.
+
+| Block | Iteration |
+|---|---|
+| 03:45 to 06:15 | 6, MCP layer, assistant and evaluations, in its own session |
+| 03:45 to 06:45 | 7, minimal frontend without the assistant panel, in its own session |
+| 06:45 to 07:45 | Merge 6, then 7, then the assistant panel. One heavy job at a time |
+| 07:45 to 08:45 | 8, delivery |
+
+Coordination between 6 and 7, by session message, as 4 and 5 did: 6 owns any migration `0005` and mutation ids A184 onward. 7 adds no migration, and its frontend checks live under `web/`. Each opens its own pull request into `main`, so no retarget step is needed (2.12, As it ran). The heavy jobs on this machine take turns.
 
 Process for Iterations 4 to 8: one cross-review round per artifact, and the mutation check covers only each iteration's new rules. Codex and Sonnet still review each other on every artifact.
 
@@ -209,31 +221,73 @@ They run over real HTTP, with the mock and Postgres as real processes.
 
 **Done when:** all of the above pass, `tests/mutation_check.py` covers the new rules with every mutation killed, `docker compose up` works from clean, CI is green, and this file is updated.
 
-### 2.5 Starter prompt for the next iteration
+### 2.5 Starter prompts for the next sessions
 
-Iteration 5 already runs in its own session. The next one to start is Iteration 6. Before pasting this, make sure Iterations 4 and 5 are merged into `main` with green CI, in that order, and that the main checkout has pulled them, because a new session starts from that code. If the owner starts 6 before they merge, the session must say which branch it starts from. Start the session on Opus at high effort, because it acts as the Director.
+Iterations 6 and 7 start now, in parallel, each in its own session, on the revised plan in 2.2. `main` at `5e3b1c0` holds Iterations 1 to 5 with green CI. Before pasting a prompt, make sure the main checkout has pulled `main`, because a new session starts from that code. Start each session on Opus at high effort, because it acts as the Director. Paste the first one, then the second: they coordinate by session message.
+
+**Iteration 6, MCP layer, assistant and evaluations**
 
 ```text
 Read CLAUDE.md, ARCHITECTURE.md, docs/STATUS.md and docs/prd.md completely before
 writing anything, and the user stories US-02, US-11 and US-12 twice.
 
 We are starting Iteration 6 (MCP layer, assistant and evaluations) as defined in
-docs/STATUS.md, Section 2.2. You are the Director.
+docs/STATUS.md, Section 2.2. You are the Director. Iteration 7 (the frontend) runs in
+parallel in another session.
 
 First, build .venv in your worktree as rule 9 of Section 2.1 says, run the tests with
-it, and confirm that Iterations 4 and 5 are on main with green CI. Then list the
-decisions with your recommendation: the MCP SDK and transport, the LLM provider, the
-deterministic mode for evaluations (1.4, item 2, and the proposal on read-only views in
-ARCHITECTURE.md), and how a tool enforces the acting user's permissions. Probe what has
-not been probed, and wait for my answers. Then implement only that scope, with the
-roles in CLAUDE.md, and have Codex and Claude Sonnet review each other's artifacts, one
-round each. If Codex stops for a usage limit, qa-ux takes its place at once. Every test
-must be able to fail.
+it, and confirm that main is at 5e3b1c0 or later with green CI. Then list, in one batch,
+the decisions with your recommendation: the MCP SDK and transport, the LLM provider and
+a deterministic mode so evaluations run without a model (1.4, item 2), how a tool takes
+the acting user's identity and reuses the API's permission checks (US-12: a trip id
+alone grants nothing), which read-only tools exist (trip, itinerary, budget, bookings,
+documents, option search), and how the evaluations are scored. Start from the proposal on
+read-only views in ARCHITECTURE.md, probe what has not been probed, and wait for my
+answers. Then implement only that scope, with the roles in CLAUDE.md, and have Codex and
+Claude Sonnet review each other's artifacts, one round each. If Codex stops for a usage
+limit, qa-ux takes its place at once. Every test must be able to fail.
 
-Follow the plan to the deadline in Section 2.2 (Sunday 09:00, UTC-3) and working rules
-10 to 13 of Section 2.1: run the mutation check only on the new rules, with a killing
-test per entry. When done, update docs/STATUS.md and show the test results. Do not
-commit until I ask.
+Coordinate with the Iteration 7 session by message: you own any migration 0005 and the
+mutation ids A184 onward, you open your own pull request into main, and heavy jobs on
+this machine take turns (rule 11). Tell it the assistant's HTTP route and response
+shape as soon as they are decided, because its UI adds the panel after your merge.
+
+Follow the revised plan to the deadline in Section 2.2 (Sunday 09:00, UTC-3) and
+working rules 10 to 13 of Section 2.1: run the mutation check only on the new rules,
+with a killing test per entry in APP_KILLERS. When done, update docs/STATUS.md and show
+the test results. Do not commit until I ask.
+```
+
+**Iteration 7, minimal frontend**
+
+```text
+Read CLAUDE.md, ARCHITECTURE.md, docs/STATUS.md and docs/prd.md completely before
+writing anything, and every user story's acceptance criteria twice.
+
+We are starting Iteration 7 (minimal frontend) as defined in docs/STATUS.md, Section
+2.2. You are the Director. Iteration 6 (MCP and assistant) runs in parallel in another
+session, so build everything except the assistant panel, which joins after 6 merges.
+
+First, build .venv in your worktree as rule 9 of Section 2.1 says, run the tests with
+it, and confirm that main is at 5e3b1c0 or later with green CI. Then list, in one batch,
+the decisions with your recommendation: the stack inside web/ (CLAUDE.md fixes React and
+TypeScript, minimal, no visual polish), how the UI reaches the API and picks a test
+identity, how it shows every failure state the PRD requires (partial, empty and failed
+searches, a stale-edit 409 with the current state, unknown, pending, failed and
+rejected bookings with their next step, document states), how status is refreshed by
+polling the state endpoints, how docker compose serves it, and how it is tested so a
+test can fail. Probe what has not been probed, and wait for my answers. Then implement
+only that scope, with the roles in CLAUDE.md, and have Codex and Claude Sonnet review
+each other's artifacts, one round each; qa-ux reviews the UI and UX. If Codex stops for
+a usage limit, qa-ux takes its place at once. Every test must be able to fail.
+
+Coordinate with the Iteration 6 session by message: you add no migration and no
+mutation id, your checks live under web/, you open your own pull request into main, and
+heavy jobs on this machine take turns (rule 11). Never change app/ behaviour to suit
+the UI without telling the owner.
+
+Follow the revised plan to the deadline in Section 2.2 (Sunday 09:00, UTC-3). When done,
+update docs/STATUS.md and show the test results. Do not commit until I ask.
 ```
 
 ### 2.6 Iteration 1 record
@@ -307,7 +361,7 @@ Rule 6 of 2.1 applies. Newest first. A fix stays a proposal until the last colum
 
 | Date | Commit | Job | Cause | Fix | Validated by owner |
 |---|---|---|---|---|---|
-| | | | No failures so far | | |
+| 2026-11-08 | `7a686d5`, the merge of #6 into `main` | `contract-tests` | `tests/test_app_transactions.py::test_create_trip_rolls_back_every_row_when_organizer_insert_fails`, line 51: `RemoteProtocolError: Server disconnected without sending a response`. After an unhandled exception whose 500 was already sent, uvicorn closes the connection (`uvicorn/protocols/http/h11_impl.py:417-420`), and the test's pooled keep-alive connection is reused for the next POST, racing that close. A timing race: the same tree passed on #6 and #8 and locally. 1 failed, 610 passed | Proposed in the close-out pull request of Iteration 4: the 500-provoking request sends `Connection: close` | Yes, on 2026-11-08 at 03:50 (UTC-3), in the Iteration 4 session |
 
 ### 2.8 Iteration 2 record
 
@@ -443,7 +497,7 @@ Also decided: an item with an open or confirmed attempt cannot be deleted, with 
 
 ### 2.11 Iteration 4 record
 
-Built on branch `claude/iteration-4-director-407c30`. Not committed: the owner decides when.
+Merged into `main` through pull request #6, as `7a686d5`. Built on branch `claude/iteration-4-director-407c30`, committed as `661ee21`.
 
 **What exists:**
 

@@ -43,7 +43,8 @@ def test_create_trip_rolls_back_every_row_when_organizer_insert_fails(
     body = valid_trip_body()
     install_participant_failure_trigger(db_engine)
     try:
-        response = app_client.post("/trips", json=body)
+        # Connection: close, because uvicorn closes the transport after an unhandled error, and a reused keep-alive connection races that close.
+        response = app_client.post("/trips", json=body, headers={"Connection": "close"})
         assert_error(response, 500, "INTERNAL_ERROR")
         assert database_counts() == (0, 0, 0)
     finally:

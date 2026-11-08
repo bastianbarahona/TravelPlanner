@@ -11,14 +11,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
 
 from app import config
-from app.api import documents, itinerary, participants, search, trips
+from app.api import assistant, documents, itinerary, participants, search, trips
+from app.api.deps import bearer_user, unauthorized
 from app.context import request_id
 from app.db.session import engine
 from app.domain.errors import ApiError, not_found
+from app.mcp.server import server as mcp_server
 from app.services import booking
 from app.services.documents import document_worker
 
@@ -36,7 +38,8 @@ async def lifespan(_app):
     if config.DOCUMENT_WORKER_ENABLED:
         tasks.append(asyncio.create_task(document_worker()))
     try:
-        yield
+        async with mcp_server.session_manager.run():  # the /mcp app below cannot serve before it runs
+            yield
     finally:
         for task in tasks:
             task.cancel()
@@ -55,6 +58,7 @@ app.include_router(itinerary.editors)
 app.include_router(search.router)
 app.include_router(documents.readers)
 app.include_router(documents.editors)
+app.include_router(assistant.router)
 
 
 class RequestIdMiddleware:
@@ -157,3 +161,28 @@ async def on_validation_error(_request, exc):
 async def on_unexpected_error(_request, exc):
     logger.error("unexpected error", exc_info=exc)
     return error_response(500, "INTERNAL_ERROR", "Something went wrong. Quote the requestId when you report it.")
+
+
+class McpAuthGuard:
+    """Refuses a missing or unknown bearer token with the API's own 401 before MCP runs: a Mount is outside every router's
+    dependencies. The tools check the same token again."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and bearer_user(Headers(scope=scope).get("authorization", "")) is None:
+            response = await on_api_error(None, unauthorized())
+            return await response(scope, receive, send)
+        await self.app(scope, receive, send)
+
+
+async def _no_such_path(scope, receive, send):
+    raise not_found()
+
+
+# Mount("/mcp") matches /mcp/... only. The bare path gets the same guard, so a caller without a token is told 401 there too,
+# and a valid one keeps the 404: the endpoint is /mcp/.
+app.add_route("/mcp", McpAuthGuard(_no_such_path), include_in_schema=False)
+# Stateless JSON-RPC over HTTP at /mcp/. The SDK's DNS-rebinding guard stays on: it admits loopback hosts only.
+app.mount("/mcp", McpAuthGuard(mcp_server.streamable_http_app(streamable_http_path="/", stateless_http=True, json_response=True)))

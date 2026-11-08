@@ -2,7 +2,7 @@
 
 As of `main` at `5e3b1c0`, with Iterations 4 and 5 merged through pull requests #6 and #8, and CI green on both jobs. CI failed once on `main` at `7a686d5`, on a race in an Iteration 2 test (2.7).
 
-**Where we stand:** Iterations 1 to 5 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, and trip documents. What is left is Iteration 6 (MCP and assistant), Iteration 7 (minimal frontend) and Iteration 8 (delivery), on the revised plan to the 09:00 deadline in 2.2. The next sessions start from the prompts in 2.5.
+**Where we stand:** Iterations 1 to 5 are merged. Iteration 6 (MCP layer, assistant and evaluations) is built, verified and committed on its branch, with no pull request yet (2.14). Iteration 7 is in pull request #10. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, and trip documents. What is left is Iteration 6 (MCP and assistant), Iteration 7 (minimal frontend) and Iteration 8 (delivery), on the revised plan to the 09:00 deadline in 2.2. The next sessions start from the prompts in 2.5.
 
 ---
 
@@ -24,7 +24,7 @@ As of `main` at `5e3b1c0`, with Iterations 4 and 5 merged through pull requests 
 | Application data model and API | Done for trips, participants, search, the itinerary, the budget, bookings and documents | `ARCHITECTURE.md`, and Sections 2.8, 2.9, 2.11 and 2.12 of this file |
 | Provider client | Done: contract-bound parsing, one deadline per request, bounded retries, bookings and by-reference reads | `ARCHITECTURE.md`, Provider client |
 | Bookings and reconciliation | Done: attempts committed before the POST, the 2.8 outcome table, monotonic states, an in-process poller | `ARCHITECTURE.md`, Bookings |
-| MCP tools and assistant | Not started, approach open (1.4, item 2) | |
+| MCP tools and assistant | Done: `mcp` 2.3.0 at `/mcp`, five read-only tools behind the API's token and `membership()`, a deterministic assistant and a model mode, evaluations E1 to E7 (2.14) | `ARCHITECTURE.md`, MCP layer and assistant |
 | Document generation | Done: HTML in `bytea`, captured in one snapshot, a leased and fenced worker, re-hashed on download (2.12) | `ARCHITECTURE.md`, Documents |
 | Deployment | Idea only (1.4, item 3) | |
 
@@ -37,17 +37,17 @@ Nothing below exists yet unless marked.
 | Supplied contract, unchanged | ✓ Committed. `.gitattributes` keeps its bytes stable, and a test pins its hash |
 | Development harness | Partial: `CLAUDE.md`, `AGENTS.md`, GitHub Actions, the team protocol with its hardening and Codex's stand-in `qa-ux`, Ponytail and `.claude/agents/` |
 | Provider mock | ✓ Merged |
-| Backend | Partial: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, and documents, merged. The MCP layer is Iteration 6 |
+| Backend | Done: trips, participants, permissions, persistence, provider client, search, itinerary, budget, readiness, bookings and reconciliation, and documents, merged. The MCP layer and the assistant are built in Iteration 6, not merged yet |
 | Frontend | Not started |
-| Read-only MCP layer and assistant | Not started |
-| Tests and evaluations | Partial: 234 contract tests for the mock and 392 application tests, 626 in all, run by GitHub Actions on every push. Assistant evaluations arrive with Iteration 6 |
+| Read-only MCP layer and assistant | Built in Iteration 6 (2.14), not merged yet |
+| Tests and evaluations | Partial: 234 contract tests for the mock and 392 application tests, 626 in all, run by GitHub Actions on every push. Iteration 6 adds the MCP, assistant and evaluation suites, and `tests/assistant_evals.py` (2.14) |
 | Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables. The `BOOKING_POLL_*` variables are application defaults that compose does not pass |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Started: decisions, open proposals, guarantees and limits |
 | `README.md` | Skeleton: run, test, mutation check, links |
 | `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
 
-User stories implemented: 9 of 12 at API level, all merged, with no interface yet: US-01 and US-03 to US-10. US-02 is partial: roles cover trips, participants, search, the itinerary, bookings and documents, and its assistant permissions arrive with Iteration 6. US-11 and US-12 are Iteration 6.
+User stories implemented: 9 of 12 at API level are merged: US-01 and US-03 to US-10. Iteration 6 builds the other three, not merged yet: US-11, US-12, and the assistant half of US-02 (2.14). The interface is Iteration 7.
 
 ### 1.3 Decisions that carry the most weight
 
@@ -72,7 +72,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | # | Item | Blocks |
 |---|---|---|
 | 1 | Closed on 2026-11-07: modular monolith, justified by the owner's notes and recorded in `ARCHITECTURE.md`. | Nothing |
-| 2 | Assistant approach. The local notes suggest a deterministic model like B-Agent, which has not been reviewed against US-11 and US-12. Parked by the owner. | Iteration 6 |
+| 2 | Closed on 2026-11-08: a deterministic assistant by default, like B-Agent's fixed policy, and Claude (`claude-sonnet-5-5`) as an opt-in mode over the same MCP tools (D2, 2.14). | Nothing |
 | 3 | Deployment target. The local notes propose Azure Container Apps. Only a proposed approach is required. Parked by the owner. | Iteration 8 |
 | 4 | Closed on 2026-11-07: the owner set the deadline at Sunday 2026-11-08, 09:00 (UTC-3). It drives the plan for Iterations 4 to 8. | Scope cuts |
 | 5 | Closed on 2026-11-07: the pasted recommendations came from AI, debated and validated with Gemini Flash and researched with Google AI (`AI-USAGE.md`). | Nothing |
@@ -122,7 +122,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 3 | Provider client, search, itinerary, budget, concurrent edits | US-03, US-04, US-05, US-06 | Partial, empty and failed searches differ, and a stale edit returns a usable 409 | ✓ Merged (2.9) |
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Merged (2.11) |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | ✓ Merged (2.12) |
-| 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | |
+| 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | Built and verified (2.14), committed on its branch |
 | 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | |
 | 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | |
 
@@ -154,7 +154,7 @@ Process for Iterations 4 to 8: one cross-review round per artifact, and the muta
 | Decision | Iteration |
 |---|---|
 | Document format, file storage, and file-to-record consistency | 5, decided (2.12) |
-| MCP SDK and transport, LLM provider, deterministic mode (1.4, item 2) | 6 |
+| MCP SDK and transport, LLM provider, deterministic mode (1.4, item 2) | 6, decided (2.14) |
 | Deployment proposal (1.4, item 3) | 8 |
 
 ### 2.4 Iteration 3 plan, as it was run
@@ -656,3 +656,67 @@ Built in parallel with Iteration 4, on branch `claude/wonderful-matsumoto-ba20cf
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the 9 that start at "A document's content lives in Postgres".
 
+
+### 2.14 Iteration 6 record
+
+Built on branch `claude/iteration-6-mcp-assistant-599778`, from `main` at `eab8575`, in parallel with Iteration 7 (2.13, pull request #10). Committed at the owner's request, with no pull request yet. The spec is `docs/iteration-6-brief.md`, including its "As built" and "After cross-review" paragraphs.
+
+**Decisions taken by the owner on 2026-11-08 at about 04:30 (UTC-3),** all five as recommended, each probed first on `mcp` 2.3.0.
+
+| # | Decision | Outcome | Probe |
+|---|---|---|---|
+| D1 | SDK and transport | `mcp==2.3.0` (`MCPServer`), Streamable HTTP, stateless with JSON, mounted at `/mcp`. The assistant is an MCP client over `httpx2.ASGITransport`, in process, with `cache=None` | The caller's `Authorization` reached the tool through `ctx.headers`. The in-process `Client(server)` carried no headers. Sync tools ran in a worker thread. The DNS-rebinding guard admits loopback hosts with a port only |
+| D2 | LLM and deterministic mode | `ASSISTANT_MODE=deterministic` by default, a fixed policy with no model. `anthropic` runs `claude-sonnet-5-5` over the same tools, with the server-side refusal fallback | `anthropic` 2.6.0 resolved next to `mcp` 2.3.0 and the pinned FastAPI. No key exists on this machine |
+| D3 | Identity and permissions | The API's bearer token, a 401 guard before MCP, and `membership()` shared with `trip_member` | The `/openapi.json` walk does not see a `Mount`, so `/mcp` has its own tests |
+| D4 | Tools | `list_trips`, `get_trip`, `get_itinerary` (with budget and booking states), `list_documents`, `search_options`, all `readOnlyHint` | None needed |
+| D5 | Evaluations | Cases E1 to E7, seven binary checks, 100% required in deterministic mode, model mode on request | None needed |
+
+**What exists:**
+
+- `app/`: `mcp/server.py` (five tools and one argument boundary), `assistant/assistant.py` (both modes), `api/assistant.py` (`POST /trips/{tripId}/assistant`), `membership()` and `bearer_user()` in `api/deps.py`, the `/mcp` mount and guard and the session manager in the lifespan in `main.py`, `ASSISTANT_MODE` and `ASSISTANT_MODEL` in `config.py`, and three pins in `requirements.txt` (`mcp`, `anthropic`, `httpx2`). No migration: the assistant stores nothing.
+- `tests/`: `test_app_mcp.py`, `test_app_assistant.py`, `assistant_evals.py` (the runner, also a CLI), `test_assistant_evals.py`, two helpers in `booking_support.py`, and A184 to A222 in `mutation_check.py`, each with its killer in `APP_KILLERS`.
+- Docs: `docs/iteration-6-brief.md`, the MCP layer and assistant section and nine limits in `ARCHITECTURE.md`, the Assistant and MCP and Evaluations sections in `README.md`, and the log entry in `AI-USAGE.md`.
+- Configuration: `docker-compose.yml` and `.env.example` pass `ASSISTANT_MODE`, `ASSISTANT_MODEL` and, only when set, `ANTHROPIC_API_KEY`.
+
+**Coordination with Iteration 7:** by session message. The route and the response shape were sent as soon as D2 was approved. Heavy jobs took turns: each session said when its job started and ended.
+
+**Cross-review:** one round per artifact, recorded in `AI-USAGE.md`. Codex reviewed `app/` and found 0 blockers, 3 majors and 2 minors. Two majors were reproduced by the Director before routing, and all were fixed or recorded as limits. `qa-lead` reviewed Codex's tests and found 2 blockers, 5 majors and 11 minors, all applied. Codex hit its usage limit at 05:00, so `qa-ux` took its role at once.
+
+**Required tests,** from the brief
+
+| # | Required test | Where |
+|---|---|---|
+| 1 | `/mcp` and `/mcp/` refuse a missing or wrong token with a 401 in the `Error` shape; exactly five read-only tools | `test_app_mcp.py::test_mcp_without_a_token_or_with_a_wrong_one_is_401_in_the_error_shape`, `::test_mcp_lists_exactly_five_read_only_tools` |
+| 2 | Every role gets the route's data; a nonparticipant, a missing trip and a malformed id get identical `NOT_FOUND`; another user's trip id grants nothing | `test_app_mcp.py::test_trip_tools_match_routes_for_every_role_and_hide_every_kind_of_unknown_trip` |
+| 3 | `list_trips` shows only the caller's trips | `test_app_mcp.py::test_list_trips_returns_only_the_callers_memberships` |
+| 4 | No tool writes: version, items, attempt and document rows unchanged, no booking at the provider | `test_app_mcp.py`, the state test with a booked item and a document |
+| 5 | Failed legs are results, not errors; every bad argument is `VALIDATION_FAILED` and never echoes the input | `test_app_mcp.py`, the provider-down and bad-argument tests |
+| 6 | The route refuses like every trip route, validates the question, and serves viewers | `test_app_assistant.py::test_assistant_route_permissions_validation_and_viewer_access` |
+| 7 | `toolCalls` are the real calls, tied to the provider's search count | `test_app_assistant.py::test_tool_calls_record_the_real_mcp_calls_and_the_provider_is_searched_once_per_search_call` |
+| 8 | The route changes no state | `test_app_assistant.py`, the state test |
+| 9 | Model mode: no credentials or a model error is 503; an invalid mode stops startup; only `end_turn` answers | `test_app_assistant.py`, the model-mode tests against a stub server |
+| E1 to E7 | The evaluations, 16 (case, check) results at 100%, and a control per defect for each check | `test_assistant_evals.py` |
+
+**Evidence**
+
+| Check | Result |
+|---|---|
+| `python -m pytest tests`, before the iteration | 626 passed, in 981 s, on `main` at `eab8575` |
+| `python -m pytest tests`, final | 679 passed, in 1663 s. 28 of 28 contract responses exercised. One warning: a connection reset in a stub thread of an Iteration 4 test |
+| The new files alone, first run | 4 failed, 13 passed: 3 by the SDK's error prefix, 1 by a test helper that assumes `ana`. Final: 53 passed |
+| `python tests/assistant_evals.py` (deterministic) | 16 of 16 (case, check) results pass, inside the suite |
+| Check controls | 26 passed, in 1.5 s, with no processes |
+| Mutation sample, timed first (rule 10) | A184 in 21 s, A205 in 19 s |
+| `python tests/mutation_check.py app A184 … A222` | 39 of 39 killed in 796 s, each by its `APP_KILLERS` test, with no stale entry and no false kill. Unmutated rules are limits in `ARCHITECTURE.md` |
+| Findings reproduced before routing | `POST /mcp` with no token answered 404; a list for `category` answered the SDK's text with `input_value`. Both fixed, killed by A187 and A197 |
+| Image built, then `python tests/compose_smoke.py` | Passes, from clean, with the new pins installed in the image. The smoke does not call the assistant: the suite covers it over real processes |
+| Model mode against the real API | Not run: no key on this machine. Its cost and score are open (item 2 below) |
+| `contracts/openAPI.json` | `git diff -- contracts/` is empty |
+| GitHub Actions | Not run: the branch has no pull request yet |
+
+**Open for the owner**
+
+1. Open the pull request into `main` with Auto-fix on. #10 (Iteration 7) merges after this one, per the plan, and its assistant panel after both.
+2. Model mode with a real key: run `tests/assistant_evals.py --mode anthropic` once, and record its cost and score here.
+
+**Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the nine that start at "MCP protocol errors keep JSON-RPC's shape", and the `ApiError` limit, rewritten.

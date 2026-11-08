@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, documents, and the web frontend exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, documents, the read-only MCP layer, the assistant and the web frontend exist. Anything here about a later iteration is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -14,7 +14,7 @@ The table of decisions in `CLAUDE.md` is the short version. This file holds the 
 
 **What this does not buy:** the provider sits outside every transaction, so a monolith does not make a booking atomic. US-08 rests on committing the attempt before the POST, and on reconciliation (`docs/CONTRACT_NOTES.md`, 2.7 and 2.9). Those are needed in either architecture.
 
-**Growth path:** domains stay separated in code, so the document worker and the MCP server can run as separate processes from the same codebase, then move to their own containers if traffic justifies it. Whether they start that way is decided in Iterations 5 and 6.
+**Growth path:** domains stay separated in code, so the document worker and the MCP server can run as separate processes from the same codebase, then move to their own containers if traffic justifies it. Both start in process: the document worker is a lifespan loop (Iteration 5), and the MCP server is mounted at `/mcp` (Iteration 6).
 
 ### Optimistic locking
 
@@ -176,6 +176,20 @@ Tested on 24 invalid offers: the schema with formats rejected 22, and the two it
 **Stale edits (US-06):** on a 409 with `details.current`, the shown trip or itinerary is replaced by it, and the alert says "Not saved". The edit form keeps only the fields the user typed, shows the typed value or else the server's, and its `PATCH` sends the `version` and those fields alone. Sending all five would let a second Save after a 409 silently revert another user's change to a field the user never touched. A successful save forgets the typed fields. A write on the trip or on the itinerary reads the other view again, because both share one `version`.
 
 **Rejected:** a router (one hash is enough), a UI or state library (the scope guardrails), and WebSocket push (the state endpoints are the source of truth).
+### MCP layer and assistant
+
+**Decision:** the official MCP SDK (`mcp` 2.3.0, `MCPServer`), Streamable HTTP, stateless with JSON responses, mounted in the same FastAPI app at `/mcp`. Five read-only tools: `list_trips`, `get_trip`, `get_itinerary` (items, booking states, issues, rules and budget), `list_documents` and `search_options`. Each calls the same service function as its route. Approved by the owner on 2026-11-08 (D1 to D5, `docs/iteration-6-brief.md`). A separate MCP process (stdio) was rejected: another piece to deploy for no gain.
+
+**Identity (US-12):** no tool takes a user. The caller is the API's own bearer token, read from the MCP HTTP request, and `/mcp` without a valid token answers 401 before MCP runs. Every tool that takes a `trip_id` resolves membership through `membership()` in `app/api/deps.py`, the same function `trip_member` calls, so a nonparticipant, a missing trip and a malformed id get the same `NOT_FOUND`, and a trip id alone grants nothing. The `/openapi.json` permission walk does not see a mounted app, so `/mcp` has its own permission tests.
+
+**The built-in assistant** (`POST /trips/{tripId}/assistant`, every participant) reaches the application only through MCP: real JSON-RPC over Streamable HTTP, served in process through `httpx2.ASGITransport`, with the caller's own `Authorization` header and no token of its own. So it can never read more than its user, and it cannot write, because the server has no write tool. The client runs with `cache=None`: the SDK's default response cache could serve one user's result to another. The in-process `Client(server)` was rejected because it carries no headers, so the identity could not travel (probed: the tool saw none).
+
+**Two modes, one route (`ASSISTANT_MODE`):**
+
+- `deterministic`, the default: a fixed policy (the brief's steps 1 to 9). It discovers the tools, reads the itinerary, searches only the categories the question names, keeps options that are bookable, not already planned and within the remaining budget, cheapest first, at most 3, and quotes only values the tools returned. It says when nothing fits and when a search or a tool failed. It needs no network and no key, so the evaluations run anywhere.
+- `anthropic`: Claude (`ASSISTANT_MODEL`, `claude-sonnet-5-5` by default) in a manual tool-use loop over the same MCP tools, at most 8 turns, with the server-side refusal fallback. Only `end_turn` is an answer. A model that cannot be reached answers 503 `ASSISTANT_UNAVAILABLE`, never a 500 or an invented answer.
+
+**Evaluations:** `tests/assistant_evals.py` runs fixed cases (E1 to E7) against real processes and scores each with binary checks: the expected tools were called, every amount and offer id in the answer appears in a tool result (`grounded`), "no suitable option" when nothing fits, failures disclosed, issues mentioned, outsiders refused, and no state change. The tool results are replayed through MCP as the same user after the answer, independent of it. Deterministic mode must score 100% in the suite. Model mode runs the same cases on request and is never part of CI. Each check has a control that proves it rejects a bad answer.
 
 ## Proposals recorded, not adopted
 
@@ -183,7 +197,7 @@ From the owner's notes. They belong to later iterations and stay open until then
 
 | Proposal | Decide in | What the review found |
 |---|---|---|
-| The assistant reads trips only through read-only SQL views, such as `v_mcp_trip_itinerary`, with the user filter added in Python | Iteration 6 | Postgres views take no parameters, so the filter lives in Python either way, and forgetting it leaks data. The view adds no permission check. What blocks mutations is a read-only database role, and the MCP layer exposing no write tools. "Only through views" also cannot cover option search, which US-12 requires and which comes from the provider. The likely simpler shape is MCP tools calling the same `services/` and the same permission check as the API. |
+| The assistant reads trips only through read-only SQL views, such as `v_mcp_trip_itinerary`, with the user filter added in Python | Iteration 6 | **Resolved in Iteration 6, without views.** Postgres views take no parameters, so the filter lives in Python either way, and forgetting it leaks data. The view adds no permission check. "Only through views" also cannot cover option search, which US-12 requires and which comes from the provider. Built instead: MCP tools calling the same `services/` and the same `membership()` as the API, and no write tool (MCP layer and assistant, above). A read-only database role was not added: the tools reach no write path. |
 | Separate `local_status` and `external_status` on a booking | Iteration 4 | **Resolved in Iteration 4, as one state plus the provider's raw record.** `state` is ours (`unknown`, `rejected` and the provider's three), and `booking` holds the provider's `Booking` as received, with its own `status`, so the provider's word is never lost and no second status column can drift from it. The separation matches US-08. Two details needed correcting. The reference cannot be one immutable UUID: each attempt has its own key and reference (A10, and 2.7 rules 4 and 5). Passive reconciliation alone cannot close `unknown` negatively, because a by-reference 404 is not proof, and only a same-key retry by the user can do that (A13, A14). |
 
 ## Questions closed by the contract
@@ -239,6 +253,11 @@ Application, each proven over real HTTP against real Postgres:
 | A document's source pairs a `version` with that version's items: an edit committed in the middle of a capture does not tear it. | `tests/test_app_documents.py`, with a test that holds `LOCK TABLE itinerary_items` while the capture waits, then commits an item and a version bump |
 | The UI shows each search status, booking state and document state with the server's own text and `nextStep`, never labels an estimate as confirmed, and sends no write control to a viewer. It adopts `details.current` after a 409 on the trip and on the itinerary, and a second save sends only the typed fields with the new `version`. It reviews refreshed terms before it books, and sends the reviewed revision and price only after "Confirm booking". It polls open bookings and documents once per interval, stops when they close, and reloads on focus. It shows every alert with its `requestId`, field errors beside their fields, and "Could not reach the server" for a network failure. | `web/tests/app.test.tsx`, Vitest with Testing Library and a stubbed `fetch` shaped like the real API |
 | The whole workflow runs in a browser against the compose stack with the provider mock's control interface on: create a trip, search every outcome of the fixtures, add and keep an item through a reload, recover a stale edit, book to `pending`, `confirmed`, `failed`, unavailable and `unknown` then retry, generate and download a document without a reload, and a viewer without write controls. | `web/e2e/travelplanner.spec.ts`, Playwright, run by hand (see Limits I accept) |
+| `/mcp` refuses a missing or wrong token with a 401 in the `Error` shape. Every MCP tool resolves the caller's membership with the API's own function: a nonparticipant, a missing trip and a malformed id get the same `NOT_FOUND`, and a trip id alone grants nothing. | `tests/test_app_mcp.py` |
+| The MCP server lists exactly five tools, all read-only. Calling every tool, or asking the assistant, changes no version, item, booking attempt or document, and books nothing. | `tests/test_app_mcp.py`, `tests/test_app_assistant.py` |
+| Every bad tool argument answers `VALIDATION_FAILED` naming the argument, never the input. A failed search leg is a result, not an error. | `tests/test_app_mcp.py` |
+| The deterministic assistant quotes only offers and amounts a tool returned, recommends only bookable, unplanned options within the remaining budget, cheapest first, at most 3, and says when nothing fits, when a search failed and which issues the itinerary has. | `tests/test_app_assistant.py`, `tests/test_assistant_evals.py` |
+| Model mode answers only on `end_turn`, never returns a partial answer, and answers 503 when the model cannot be reached. | `tests/test_app_assistant.py`, against a stub server |
 
 ## Limits I accept
 
@@ -250,7 +269,16 @@ Application, each proven over real HTTP against real Postgres:
 - **`GET /openapi.json` is public** and is the one route outside its own schema. FastAPI registers it that way, and the permission walk names it explicitly.
 - **`GET /health` is liveness only,** and runs no query. `GET /ready` runs `SELECT 1` and is what the compose healthcheck uses. Neither calls the provider, because the application serves without it: a search with no provider shows every leg failed.
 - **Test tokens are a plain dictionary lookup,** which is not constant time. That does not matter for fixed test tokens, and a real identity provider replaces it.
-- **`ApiError` carries an HTTP status,** so the domain knows about HTTP. Split it when a non-HTTP caller, the MCP server of Iteration 6, needs the services.
+- **`ApiError` carries an HTTP status,** so the domain knows about HTTP. The MCP server of Iteration 6 maps it to a tool error, `CODE: message`, and ignores the status, so no split was needed. Split it when a caller needs the services without that mapping.
+- **MCP protocol errors keep JSON-RPC's shape.** Only the 401 at `/mcp` has the API's `Error` shape. A malformed JSON-RPC body after authentication gets the SDK's JSON-RPC error, with `X-Request-Id` but no `requestId` in the body. A tool error's text carries the SDK's prefix, `Error executing tool <name>: `.
+- **The MCP endpoint admits loopback hosts only,** the SDK's DNS-rebinding default. The built-in assistant reaches it in process, so nothing else needs it. An external MCP client (not required by US-12) needs its host added to the allowed list.
+- **The assistant keeps no conversation.** Each question is answered on its own, and nothing is stored, so no migration was needed. Store conversations if a user must come back to one.
+- **The deterministic assistant cannot search transport.** The provider needs an origin for transport, the trip records none (A30), and parsing one from the question is out of scope. The search is sent and its `VALIDATION_FAILED` is disclosed in the answer.
+- **The deterministic assistant's words are fixed.** It understands a category only by keyword, in English, and does not read dates, prices or preferences from the question. Model mode does.
+- **The argument check reads a private attribute of the SDK,** `_tool_manager` in `mcp` 2.3.0, which is pinned. Check it again whenever the pin moves.
+- **The model client is built per question,** with the SDK's own retries. Reuse one client, and stream, if latency matters.
+- **Rules of the assistant that no test mutates:** the guard that stops on a sixth tool, `cache=None`, the 8-turn cap, the tool's own 401 behind the guard, the narrowed `TypeError`, and that the assistant forwards its caller's token rather than another valid one. Each is enforced in `app/assistant/assistant.py` and `app/mcp/server.py`, and none has a cheap test.
+- **Model mode is not evaluated in CI.** It needs a key and costs money per run. Its cost and score are measured when a key is supplied (`README.md`, Evaluations).
 - **Migrations run online only.** Offline SQL scripts are not needed while the deploy runs `upgrade head` itself.
 - **One provider client per process, never closed.** The process exit closes its sockets. Add a lifespan hook if the client is ever restarted in-process.
 - **Overlaps compare every pair of items, O(n²).** That is fine for tens of items. Sort by start and sweep if an itinerary grows large.

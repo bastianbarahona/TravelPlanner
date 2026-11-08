@@ -67,6 +67,40 @@ Two variables, both in `docker-compose.yml`: `DOCUMENT_WORKER_ENABLED` (`1`; `0`
 `DOCUMENT_LEASE_SECONDS` (`30`; how long a worker holds a document before another may take it). How the snapshot, the
 file and its hash stay consistent is in `ARCHITECTURE.md`, Documents.
 
+## Assistant and MCP
+
+A read-only assistant answers questions about a trip, using only what the application's MCP tools return (US-11,
+US-12). It never changes the itinerary and never books.
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST /trips/{tripId}/assistant` with `{"question": "..."}` | members | `{tripId, mode, answer, toolCalls}`; `toolCalls` lists every MCP call it made |
+| `/mcp/` (Streamable HTTP, same bearer token) | any valid token | the MCP server: `list_trips`, `get_trip`, `get_itinerary`, `list_documents`, `search_options` |
+
+Two variables, both in `docker-compose.yml`:
+
+- `ASSISTANT_MODE`: `deterministic` (the default, no model, no key) or `anthropic` (Claude through the Anthropic API).
+- `ASSISTANT_MODEL`: `claude-sonnet-5-5` by default, used only in `anthropic` mode, which also needs
+  `ANTHROPIC_API_KEY`.
+
+How identity, permissions and both modes work is in `ARCHITECTURE.md`, MCP layer and assistant.
+
+## Evaluations
+
+Fixed cases (E1 to E7) score the assistant with binary checks: the right tools were called, every price and offer id in
+the answer came from a tool, "no suitable option" when nothing fits, failures and issues are stated, outsiders are
+refused, and nothing changes.
+
+```bash
+.venv/Scripts/python tests/assistant_evals.py                      # deterministic: no model, no cost, must be 100%
+.venv/Scripts/python -m pytest tests/test_assistant_evals.py       # the same, plus a control per check
+ANTHROPIC_API_KEY=... .venv/Scripts/python tests/assistant_evals.py --mode anthropic   # model mode, reports scores
+```
+
+The deterministic run is part of the suite and of CI. Model mode is not: it needs a key, calls Claude for each case
+(up to 8 model turns per question), and is billed by the Anthropic API. Its measured cost and score are recorded in
+`docs/STATUS.md` once a key is supplied.
+
 ## Test
 
 Every worktree has its own `.venv`. Docker must be running, because the tests start a real Postgres.
@@ -99,4 +133,4 @@ A survivor is a rule no test protects.
 
 ## Not written yet
 
-Setup beyond Docker, the proposed deployment and the evaluations arrive with their iterations.
+Setup beyond Docker and the proposed deployment arrive with their iterations.

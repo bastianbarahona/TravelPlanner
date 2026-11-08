@@ -665,6 +665,127 @@ APP_MUTATIONS = [
     ("A183", "document source stores the full attempt view", "services/documents.py", [
         ('{"state": item["booking"]["state"], "clientReference": item["booking"]["clientReference"]}', 'item["booking"]'),
     ]),
+    # Iteration 6: the MCP layer and the assistant.
+    ('A184', 'the /mcp mount has no auth guard', 'main.py', [
+        ('app.mount("/mcp", McpAuthGuard(', 'app.mount("/mcp", ('),
+    ]),
+    ('A185', 'the /mcp guard checks the scheme and skips the token lookup', 'main.py', [
+        ('bearer_user(Headers(scope=scope).get("authorization", "")) is None', 'not Headers(scope=scope).get("authorization", "").lower().startswith("bearer ")'),
+    ]),
+    ('A186', 'the /mcp 401 has no WWW-Authenticate', 'main.py', [
+        ('on_api_error(None, unauthorized())', 'on_api_error(None, ApiError(401, "UNAUTHORIZED", "The bearer token is missing or invalid."))'),
+    ]),
+    ('A187', 'the exact /mcp path has no guarded route', 'main.py', [
+        ('app.add_route("/mcp", McpAuthGuard(_no_such_path), include_in_schema=False)\n', ''),
+    ]),
+    ('A188', 'the lifespan does not run the MCP session manager', 'main.py', [
+        ('        async with mcp_server.session_manager.run():  # the /mcp app below cannot serve before it runs\n            yield\n', '        yield\n'),
+    ]),
+    ('A189', 'list_documents is not marked read-only', 'mcp/server.py', [
+        ('@server.tool(annotations=READ_ONLY)\ndef list_documents', '@server.tool()\ndef list_documents'),
+    ]),
+    ('A190', 'a sixth tool is registered', 'mcp/server.py', [
+        ('        await run_in_threadpool(session.close)\n', '        await run_in_threadpool(session.close)\n\n\n@server.tool(annotations=READ_ONLY)\ndef book_trip(ctx: Context) -> dict[str, Any]:\n    return {}\n'),
+    ]),
+    ('A191', 'the trip tools skip the membership check', 'mcp/server.py', [
+        ('from app.api.deps import bearer_user, membership, unauthorized\n', 'from uuid import UUID\n\nfrom app.api.deps import Access, bearer_user, membership, unauthorized\n'),
+        ('        return use(session, membership(session, user, trip_id))\n', '        return use(session, Access(user, "organizer", UUID(trip_id)))\n'),
+    ]),
+    ('A192', 'search_options skips the membership check', 'mcp/server.py', [
+        ('from app.api.deps import bearer_user, membership, unauthorized\n', 'from uuid import UUID\n\nfrom app.api.deps import Access, bearer_user, membership, unauthorized\n'),
+        ('            access = await run_in_threadpool(membership, session, user, trip_id)\n', '            access = Access(user, "organizer", UUID(trip_id))\n'),
+    ]),
+    ('A193', "list_trips lists another user's trips", 'mcp/server.py', [
+        ('trips.list_trips(session, user)', 'trips.list_trips(session, "ana")'),
+    ]),
+    ('A194', 'failed search legs become a tool error', 'mcp/server.py', [
+        ('            return await search.search_trip(session, access, body)\n', '            found = await search.search_trip(session, access, body)\n            if any(leg["status"] == "failed" for leg in found["legs"]):\n                raise ToolError("PROVIDER_UNAVAILABLE: the search failed")\n            return found\n'),
+    ]),
+    ('A195', 'a validation message echoes the input', 'mcp/server.py', [
+        ('e["msg"].removeprefix("Value error, ")}', 'e["msg"].removeprefix("Value error, ") + " " + str(e["input"])}'),
+    ]),
+    ('A196', 'an unknown tool argument is not refused', 'mcp/server.py', [
+        ('for field in sorted(set(arguments) - set(tool.parameters.get("properties", {})))', 'for field in []'),
+    ]),
+    ('A197', "a wrong or missing argument falls to the SDK's own check", 'mcp/server.py', [
+        ('                tool.fn_metadata.validate_arguments(arguments)\n', '                pass\n'),
+    ]),
+    ('A198', 'a malformed trip id answers differently from a missing one', 'api/deps.py', [
+        ('    except ValueError:\n        raise not_found() from None\n', '    except ValueError:\n        raise not_found("Trip id") from None\n'),
+    ]),
+    ('A199', 'a nonparticipant gets 403 instead of 404', 'api/deps.py', [
+        ('    if role is None:\n        raise not_found()\n    return Access(user, role, trip_id)\n', '    if role is None:\n        raise ApiError(403, "FORBIDDEN", "You are not a participant.")\n    return Access(user, role, trip_id)\n'),
+    ]),
+    ('A200', 'the assistant route needs the organizer', 'api/assistant.py', [
+        ('from app.api.deps import trip_member\n', 'from app.api.deps import trip_member, trip_organizer\n'),
+        ('dependencies=[Depends(trip_member)]', 'dependencies=[Depends(trip_organizer)]'),
+    ]),
+    ('A201', 'the question may be 2000 characters', 'api/assistant.py', [
+        ('max_length=1000', 'max_length=2000'),
+    ]),
+    ('A202', 'the question is not stripped', 'api/assistant.py', [
+        ('strip_whitespace=True, ', ''),
+    ]),
+    ('A203', 'a question with no category searches accommodation', 'assistant/assistant.py', [
+        ('    lines = []\n    if categories:\n', '    categories = categories or ["accommodation"]\n    lines = []\n    if categories:\n'),
+    ]),
+    ('A204', 'a question with a category never searches', 'assistant/assistant.py', [
+        ('            lines += await _options(call, trip_id, category, view, remaining, dates)\n', '            pass\n'),
+    ]),
+    ('A205', 'an option over the remaining budget is offered', 'assistant/assistant.py', [
+        ('option["offer"]["id"] not in planned and price <= remaining', 'option["offer"]["id"] not in planned'),
+    ]),
+    ('A206', 'an unavailable or expired option is offered', 'assistant/assistant.py', [
+        ('if option["bookable"] and option["offer"]["id"] not in planned', 'if option["offer"]["id"] not in planned'),
+    ]),
+    ('A207', 'an offer already in the itinerary is offered again', 'assistant/assistant.py', [
+        (' and option["offer"]["id"] not in planned and price <= remaining', ' and price <= remaining'),
+    ]),
+    ('A208', 'four options are offered, not three', 'assistant/assistant.py', [
+        ('    )[:3]\n', '    )[:4]\n'),
+    ]),
+    ('A209', 'options are sorted dearest first', 'assistant/assistant.py', [
+        ('        key=lambda found: found[:2],  # cheapest first, the offer id breaks a tie\n', '        key=lambda found: found[:2], reverse=True,\n'),
+    ]),
+    ('A210', 'an option priced exactly at the remaining budget is refused', 'assistant/assistant.py', [
+        ('option["offer"]["id"] not in planned and price <= remaining', 'option["offer"]["id"] not in planned and price < remaining'),
+    ]),
+    ('A211', 'an option line drops the budget reason', 'assistant/assistant.py', [
+        ('        line += f" Fits the remaining budget of {shown_remaining} USD."\n', ''),
+    ]),
+    ('A212', 'an option line drops the trip dates reason', 'assistant/assistant.py', [
+        ('            line += " Within the trip dates."\n', '            pass\n'),
+    ]),
+    ('A213', 'the remaining budget goes below zero', 'assistant/assistant.py', [
+        ('max(parse_amount("0.00"), parse_amount(budget["budgetUsd"]) - parse_amount(budget["totalUsd"]))', 'parse_amount(budget["budgetUsd"]) - parse_amount(budget["totalUsd"])'),
+    ]),
+    ('A214', 'a failed leg is not disclosed', 'assistant/assistant.py', [
+        ('            lines.append(f"Search for {category} in {leg[\'destination\']} failed; no options from it.")\n', '            pass\n'),
+    ]),
+    ('A215', 'a partial leg is not flagged', 'assistant/assistant.py', [
+        ('            lines.append(f"Results for {category} in {leg[\'destination\']} may be incomplete.")\n', '            pass\n'),
+    ]),
+    ('A216', 'the itinerary issues are left out of the answer', 'assistant/assistant.py', [
+        ('    lines += [f"Issue {issue[\'code\']}: {issue[\'message\']}" for issue in view["issues"]]\n', ''),
+    ]),
+    ('A217', 'a shown price is 1.00 too high', 'assistant/assistant.py', [
+        ("{format_amount(price)} USD, {offer['startsAt']}", '{format_amount(price + parse_amount("1.00"))} USD, {offer[\'startsAt\']}'),
+    ]),
+    ('A218', 'a max_tokens stop returns the partial text', 'assistant/assistant.py', [
+        ('            if response.stop_reason != "tool_use" or not uses:  # max_tokens and the rest: a partial answer is never returned\n                return f"I stopped before a complete answer (stop reason: {response.stop_reason})."\n', '            if response.stop_reason != "tool_use" or not uses:\n                return "".join(block.text for block in response.content if block.type == "text")\n'),
+    ]),
+    ('A219', 'a pause_turn is treated as the final answer', 'assistant/assistant.py', [
+        ('            if response.stop_reason == "end_turn":\n', '            if response.stop_reason in ("end_turn", "pause_turn"):\n'),
+    ]),
+    ('A220', "a refusal returns the model's own text", 'assistant/assistant.py', [
+        ('                return "The model declined to answer this question."\n', '                return "".join(block.text for block in response.content if block.type == "text")\n'),
+    ]),
+    ('A221', 'a model API error is not caught', 'assistant/assistant.py', [
+        ('            except anthropic.AnthropicError as error:', '            except ZeroDivisionError as error:'),
+    ]),
+    ('A222', 'an invalid ASSISTANT_MODE is accepted', 'config.py', [
+        ('if ASSISTANT_MODE not in ("deterministic", "anthropic"):\n    raise ValueError("ASSISTANT_MODE must be deterministic or anthropic")\n', ''),
+    ]),
 ]
 
 
@@ -763,13 +884,56 @@ APP_KILLERS = {
     "A181": "test_app_booking_concurrency.py::test_concurrent_bookings_never_post_twice_when_the_winner_closes_at_once[failed]",
     "A182": "test_app_documents.py::test_a_confirmed_booking_shows_its_state_and_accepted_price_and_stores_only_state_and_reference",
     "A183": "test_app_documents.py::test_two_requests_either_side_of_a_poll_return_the_same_document",
+    # Iteration 6.
+    'A184': 'test_app_mcp.py::test_mcp_without_a_token_or_with_a_wrong_one_is_401_in_the_error_shape[/mcp/]',
+    'A185': 'test_app_mcp.py::test_mcp_without_a_token_or_with_a_wrong_one_is_401_in_the_error_shape[/mcp/]',
+    'A186': 'test_app_mcp.py::test_mcp_without_a_token_or_with_a_wrong_one_is_401_in_the_error_shape[/mcp/]',
+    'A187': 'test_app_mcp.py::test_mcp_without_a_token_or_with_a_wrong_one_is_401_in_the_error_shape[/mcp]',
+    'A188': 'test_app_mcp.py::test_mcp_lists_exactly_five_read_only_tools',
+    'A189': 'test_app_mcp.py::test_mcp_lists_exactly_five_read_only_tools',
+    'A190': 'test_app_mcp.py::test_mcp_lists_exactly_five_read_only_tools',
+    'A191': 'test_app_mcp.py::test_trip_tools_match_routes_for_every_role_and_hide_every_kind_of_unknown_trip',
+    'A192': 'test_app_mcp.py::test_trip_tools_match_routes_for_every_role_and_hide_every_kind_of_unknown_trip',
+    'A193': 'test_app_mcp.py::test_list_trips_returns_only_the_callers_memberships',
+    'A194': 'test_app_mcp.py::test_search_options_with_the_provider_down_returns_failed_legs_not_an_error',
+    'A195': 'test_app_mcp.py::test_search_options_with_an_invalid_category_names_the_field_and_never_the_input',
+    'A196': 'test_app_mcp.py::test_every_tool_fails_a_bad_argument_as_validation_failed_naming_it_and_never_the_input[unknown-get-trip-argument]',
+    'A197': 'test_app_mcp.py::test_every_tool_fails_a_bad_argument_as_validation_failed_naming_it_and_never_the_input[wrong-type]',
+    'A198': 'test_app_mcp.py::test_trip_tools_match_routes_for_every_role_and_hide_every_kind_of_unknown_trip',
+    'A199': 'test_app_mcp.py::test_trip_tools_match_routes_for_every_role_and_hide_every_kind_of_unknown_trip',
+    'A200': 'test_app_assistant.py::test_assistant_route_permissions_validation_and_viewer_access',
+    'A201': 'test_app_assistant.py::test_assistant_route_permissions_validation_and_viewer_access',
+    'A202': 'test_app_assistant.py::test_assistant_route_permissions_validation_and_viewer_access',
+    'A203': 'test_app_assistant.py::test_a_question_with_no_category_answers_the_budget_the_issues_and_the_hint_and_searches_nothing',
+    'A204': 'test_app_assistant.py::test_tool_calls_record_the_real_mcp_calls_and_the_provider_is_searched_once_per_search_call',
+    'A205': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A206': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A207': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A208': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A209': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A210': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A211': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A212': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A213': 'test_app_assistant.py::test_an_over_budget_trip_clamps_the_remaining_budget_at_zero_and_says_why_nothing_fits',
+    'A214': 'test_app_assistant.py::test_a_failed_leg_is_disclosed_and_a_partial_leg_says_its_results_may_be_incomplete',
+    'A215': 'test_app_assistant.py::test_a_failed_leg_is_disclosed_and_a_partial_leg_says_its_results_may_be_incomplete',
+    'A216': 'test_app_assistant.py::test_a_question_with_no_category_answers_the_budget_the_issues_and_the_hint_and_searches_nothing',
+    'A217': 'test_app_assistant.py::test_candidates_are_the_cheapest_three_bookable_unplanned_offers_within_the_remaining_budget',
+    'A218': 'test_app_assistant.py::test_model_mode_reports_a_stop_reason_that_is_not_an_answer_and_never_the_partial_text[max_tokens]',
+    'A219': 'test_app_assistant.py::test_model_mode_sends_pause_turn_back_and_counts_it_as_a_turn',
+    'A220': 'test_app_assistant.py::test_model_mode_answers_the_declined_text_on_a_refusal_and_not_the_models_text',
+    'A221': 'test_app_assistant.py::test_model_mode_answers_503_and_no_answer_when_the_model_returns_an_error',
+    'A222': 'test_app_assistant.py::test_anthropic_without_credentials_is_503_and_invalid_mode_prevents_startup',
 }
 
 
 APP_TEST_MAP = {
-    "api/deps.py": ("test_app_permissions.py", "test_app_itinerary_permissions.py"),
+    "api/deps.py": ("test_app_permissions.py", "test_app_itinerary_permissions.py", "test_app_mcp.py"),
+    "api/assistant.py": ("test_app_assistant.py",),
+    "assistant/assistant.py": ("test_app_assistant.py",),
+    "mcp/server.py": ("test_app_mcp.py", "test_app_assistant.py"),
     "api/documents.py": ("test_app_documents.py",),
-    "config.py": ("test_app_documents.py",),
+    "config.py": ("test_app_documents.py", "test_app_assistant.py"),
     "services/documents.py": ("test_app_documents.py",),
     "db/migrations/versions/0004_documents.py": ("test_app_documents.py", "test_app_database.py"),
     "api/itinerary.py": ("test_app_itinerary_permissions.py", "test_app_bookings.py"),
@@ -800,6 +964,8 @@ APP_TEST_MAP = {
         "test_app_diagnostics.py",
         "test_app_booking_recovery.py",
         "test_app_documents.py",
+        "test_app_mcp.py",
+        "test_app_assistant.py",
     ),
     "money.py": ("test_app_validation.py", "test_app_itinerary.py"),
     "providers/client.py": ("test_app_provider.py", "test_app_bookings.py", "test_app_booking_views.py", "test_app_diagnostics.py"),

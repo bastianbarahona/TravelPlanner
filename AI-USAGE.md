@@ -45,6 +45,36 @@ None of this is an application dependency.
 
 **Tooling:** Codex answered `You've hit your usage limit ... try again at 5:49 AM` in both runs, after reading the files. Iteration 6 shares the account.
 
+### 2026-11-08: Iteration 6, MCP layer, assistant and evaluations
+
+**Way of working:** one brief, `docs/iteration-6-brief.md`, was the spec for both authors. The owner approved its five decisions (D1 to D5), after the Director probed the MCP SDK first: the transport, the token reaching a tool, `ToolError` texts, and the in-process client carrying no headers. Claude Sonnet (`dev-principal`) built `app/`. Codex wrote `tests/` from the brief without reading `app/`, then reviewed `app/` read-only. Codex hit its usage limit on its second test round, so `qa-ux` took its role at once and fixed and extended the tests and wrote mutations A184 to A222. The Director reproduced every app finding before routing it, and ran every check.
+
+**Who validated whom**
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `app/`, first round | Claude Sonnet | Codex, read-only | 0, 3, 2 | 2 majors reproduced by the Director, all 3 and 1 minor fixed. The other minor became a limit in `ARCHITECTURE.md` |
+| `tests/`, first round | Codex | Claude Sonnet (`qa-lead`), read-only | 2, 5, 11 | All applied by `qa-ux`, as Codex's stand-in |
+| `tests/`, second round, and mutations A184 to A222 | `qa-ux` | The Director's runs and the mutation check | 1 test defect | Fixed: see below |
+| Recommendations D1 to D5 | Director | Probes of `mcp` 2.3.0 | 0 corrections | Approved by the owner |
+
+**Where an assistant was wrong**
+
+| Who | What it got wrong | How it was detected | What changed |
+|---|---|---|---|
+| Director | D1 said a `ToolError` reaches the client "with its text". The SDK prefixes it with `Error executing tool <name>: `, so Codex's tests, written from D1, expected `NOT_FOUND:` at the start | The Director's first run: 3 failures | The brief records the prefix. The tests strip it in one helper |
+| Director | The brief's step 5 searched transport without an origin, which `SearchTrip` requires | Sonnet's report | Kept, disclosed in the answer, and recorded as a limit |
+| Claude Sonnet | Mounted MCP at `/mcp`, but Starlette's `Mount` matches only `/mcp/...`, so `POST /mcp` with no token answered 404, not 401 | Codex's review, reproduced by the Director in process | The exact path gets the same guard. A187 |
+| Claude Sonnet | Relied on the SDK's own argument check, which answers with pydantic's text and echoes the input, and ignores unknown arguments | Codex's review (and `qa-lead`'s), reproduced by the Director: `1 validation error for search_optionsArguments ... input_value=...` | One boundary for all tools answers `VALIDATION_FAILED`. A196, A197 |
+| Claude Sonnet | Treated every stop reason except `tool_use` as a final answer, so a `max_tokens` answer was returned as complete | Codex's review | Only `end_turn` answers. `pause_turn` continues. A218, A219 |
+| Claude Sonnet | Caught every `TypeError` as "model unavailable", which hides real bugs as 503s | Codex's review, and the Director's reading | Only the SDK's missing-credentials `TypeError` |
+| Codex | Two tests asserted more than the brief (the exact call list) or less than the app's real text (the SDK prefix), and one created a trip as another user through a helper that asserts the organizer is `ana` | The Director's run: 4 failed, 13 passed | Fixed by `qa-ux` |
+| Codex | Evaluation checks could pass with zero results, and each negative control mixed several defects, so a half-broken check passed its control | `qa-lead`'s review | Exact expected (case, check) pairs, one control per defect |
+| Codex | No test exercised the candidate filter: unavailable, already planned, the cap, the order and the boundary | `qa-lead`'s review | A real-HTTP test of the filter, killing A205 to A212 |
+| `qa-ux` | Asserted that the Anthropic SDK sends the key as `x-api-key`. Version 2.6.0 sends `Authorization: Bearer` | The Director's run: `KeyError: 'x-api-key'`, then `anthropic/_client.py:374-378` | Fixed |
+
+**Tooling:** Codex answered `You've hit your usage limit ... try again at 5:49 AM` at 05:00. The Iteration 7 session shares the account and the machine; heavy jobs took turns by session message (rule 11).
+
 ### 2026-11-08: Iteration 5, cross-review
 
 **Way of working:** one brief, `docs/iteration-5-brief.md`, written by the Director and approved by the owner, was the spec for both authors. Claude Sonnet (`dev-principal`) built `app/`. Codex stopped on its first call with a usage limit, before reading a file, so `qa-ux` took its role at once, as `CLAUDE.md` requires: it wrote `tests/` from the brief without reading `app/`, then reviewed `app/`. The Director ran every check.

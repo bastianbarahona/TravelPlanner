@@ -63,6 +63,9 @@ services:
       PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-10}
       DOCUMENT_WORKER_ENABLED: ${DOCUMENT_WORKER_ENABLED:-1}
       DOCUMENT_LEASE_SECONDS: ${DOCUMENT_LEASE_SECONDS:-30}
+      ASSISTANT_MODE: ${ASSISTANT_MODE:-deterministic}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-claude-sonnet-5-5}
+      ANTHROPIC_API_KEY:  # passed through from the shell or .env only when set; never a default
     depends_on:
       migrate:
         condition: service_completed_successfully

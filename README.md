@@ -5,7 +5,25 @@ application books items through an external provider that it reaches only over i
 (`contracts/openAPI.json`). A booking is never assumed: the application records the attempt before it asks, and reconciles
 with the provider until it knows the outcome.
 
-This is a skeleton, written in Iteration 4. Each later iteration fills in its section.
+To see it work, follow Setup below and then `DEMO.md`, a walkthrough with the expected outcome of each scenario and the test that proves it.
+
+## Setup from a clean clone
+
+Prerequisites:
+
+- Git, and Docker with Compose v2 (`docker compose`). That is all `docker compose up` needs: the images pull their own Python 3.12 and Node 24 builds.
+- Python 3.12 or later, only to run the tests (CI uses 3.12). Docker must also run for them.
+- Node only to run the web unit tests and the browser tests. `web/package.json` declares no `engines`. CI and the web image build on Node 24, and the pinned versions are chosen to also run on Node 21 (`ARCHITECTURE.md`, Frontend).
+
+Steps:
+
+1. `git clone <repository-url>` and `cd` into it.
+2. `docker compose up --build`. The first build takes a few minutes.
+3. Wait until `app` and `web` report healthy (`docker compose ps`). The `migrate` service runs once and exits with code 0.
+4. Open `http://localhost:8080` and pick an identity in the selector: `ana`, `ben`, `cam` or `dee` (test identities, below).
+5. `docker compose down` stops the stack and keeps the data (the `app-db-data` and `provider-mock-data` volumes). `docker compose down -v` also deletes the volumes, which wipes every trip and booking.
+
+Ports 8080, 8000 and 4010 must be free (`WEB_PORT`, `APP_PORT` and `MOCK_PORT` change them).
 
 ## Run
 
@@ -44,7 +62,8 @@ docker compose -p travelplanner-e2e -f docker-compose.yml -f web/e2e/compose.e2e
 cd web
 npx playwright install chromium   # once
 npm run e2e
-docker compose -p travelplanner-e2e down -v   # from the repository root
+cd ..
+docker compose -p travelplanner-e2e down -v
 ```
 
 For development, `npm run dev` in `web/` serves the page with hot reload and proxies `/api` to `http://localhost:8000`, so start the application first (`docker compose up --build`, or the `app` service alone).
@@ -124,13 +143,25 @@ Proves the tests can fail: it breaks one rule at a time in a temporary copy of t
 
 A survivor is a rule no test protects.
 
+## Checks
+
+CI (`.github/workflows/ci.yml`) runs on every push, in three jobs:
+
+- `contract-tests`: `pip install -r tests/requirements.txt`, then `python -m pytest tests` (Python 3.12, 20 minutes at most).
+- `compose-smoke`: `python3 tests/compose_smoke.py` against the compose stack (10 minutes at most).
+- `web`: in `web/`, `npm ci`, `npm run typecheck`, `npm test` and `npm run build` (Node 24, 10 minutes at most).
+
+The contract is immutable. `git diff -- contracts/` must print nothing, and `tests/test_contract_checks.py` fails when the SHA-256 of `contracts/openAPI.json` changes. The browser tests and the mutation check are manual, and are not in CI.
+
+## Deployment (proposed)
+
+Not deployed. The proposal is Azure Container Apps: `web` public, `app` and the provider internal, `migrate` as a job run before each revision, a managed PostgreSQL, secrets in Key Vault. `ARCHITECTURE.md`, Deployment (proposed, not deployed), holds the reasoning, the rejected options and the changes it needs.
+
 ## More
+
+- `DEMO.md`: the main workflow, and the failure and concurrency scenarios, step by step.
 
 - `ARCHITECTURE.md`: decisions, alternatives, guarantees, limits and risks.
 - `docs/STATUS.md`: where the project stands, iteration by iteration.
 - `provider-mock/README.md`: the provider mock, its fixtures and its control interface.
 - `docs/CONTRACT_NOTES.md`: how the contract is read, and the gaps it leaves.
-
-## Not written yet
-
-Setup beyond Docker and the proposed deployment arrive with their iterations.

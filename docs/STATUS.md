@@ -2,7 +2,9 @@
 
 As of `main` at `f25a78f`, with Iterations 1 to 7 merged (6 through pull request #11, 7 through #10) and the CI timeout fix through #12, and CI green on all three jobs. CI on `main` was cancelled once at the old 10-minute bound, and failed once on a race in an Iteration 2 test (2.7).
 
-**Where we stand:** Iterations 1 to 7 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, trip documents, a read-only MCP layer with an assistant, and a browser interface for every workflow of US-01 to US-10. What is left is the assistant panel in the interface and Iteration 8 (delivery), in two parallel sessions on the second revised plan in 2.2, to the 09:00 deadline. The next sessions start from the prompts in 2.5.
+**Iteration 8 (delivery), 2026-11-08 at about 08:40:** `README.md` setup from a clean clone, `DEMO.md`, the deployment proposal in `ARCHITECTURE.md`, and a clean clone of `main` that ran from the README and reproduced S1 to S7 over the API (2.16). The assistant panel's state is in 2.15.
+
+**Where we stood before Iteration 8:** Iterations 1 to 7 are merged. The application has trips, participants and permissions, search, an itinerary with a budget, bookings with background reconciliation, trip documents, a read-only MCP layer with an assistant, and a browser interface for every workflow of US-01 to US-10. What is left is the assistant panel in the interface and Iteration 8 (delivery), in two parallel sessions on the second revised plan in 2.2, to the 09:00 deadline. The next sessions start from the prompts in 2.5.
 
 ---
 
@@ -27,7 +29,7 @@ As of `main` at `f25a78f`, with Iterations 1 to 7 merged (6 through pull request
 | MCP tools and assistant | Done: `mcp` 2.3.0 at `/mcp`, five read-only tools behind the API's token and `membership()`, a deterministic assistant and a model mode, evaluations E1 to E7 (2.14) | `ARCHITECTURE.md`, MCP layer and assistant |
 | Document generation | Done: HTML in `bytea`, captured in one snapshot, a leased and fenced worker, re-hashed on download (2.12) | `ARCHITECTURE.md`, Documents |
 | Frontend design | Done: React and TypeScript in `web/`, same origin through nginx, the server's states verbatim, polling only while something is open (2.13) | `ARCHITECTURE.md`, Frontend |
-| Deployment | Idea only (1.4, item 3) | |
+| Deployment | Proposed, not deployed: Azure Container Apps, approved by the owner on 2026-11-08 (2.16) | `ARCHITECTURE.md`, Deployment |
 
 ### 1.2 Development
 
@@ -45,8 +47,8 @@ Nothing below exists yet unless marked.
 | Sample data and example configuration | Partial: mock fixtures and `.env.example`, with the `DOCUMENT_*` variables. The `BOOKING_POLL_*` variables are application defaults that compose does not pass |
 | `AI-USAGE.md` | Started: harness and log |
 | `ARCHITECTURE.md` | Decisions, guarantees and limits for every built part. The deployment proposal is Iteration 8 |
-| `README.md` | Partial: run, web, documents, assistant and MCP, evaluations, test, mutation check. Setup from a clean clone and the deployment approach are Iteration 8 |
-| `DEMO.md` | Not started. `provider-mock/README.md` covers the mock |
+| `README.md` | ✓ Setup from a clean clone, run, web, documents, assistant and MCP, evaluations, test, mutation check, checks, and the proposed deployment (2.16) |
+| `DEMO.md` | ✓ Seven scenarios, S1 to S7, each reproduced over the API on a clean clone of `main` (2.16) |
 
 User stories implemented: 12 of 12, all merged. US-01 to US-10 have an API and a browser interface. US-11 and US-12 have the API, the MCP layer and the assistant, with no panel in the interface yet (2.5).
 
@@ -74,7 +76,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 |---|---|---|
 | 1 | Closed on 2026-11-07: modular monolith, justified by the owner's notes and recorded in `ARCHITECTURE.md`. | Nothing |
 | 2 | Closed on 2026-11-08: a deterministic assistant by default, like B-Agent's fixed policy, and Claude (`claude-sonnet-5-5`) as an opt-in mode over the same MCP tools (D2, 2.14). | Nothing |
-| 3 | Deployment target. The local notes propose Azure Container Apps. Only a proposed approach is required. Parked by the owner. | Iteration 8 |
+| 3 | Closed on 2026-11-08: Azure Container Apps, as a proposal only. Nothing is deployed (`ARCHITECTURE.md`, Deployment). | Nothing |
 | 4 | Closed on 2026-11-07: the owner set the deadline at Sunday 2026-11-08, 09:00 (UTC-3). It drives the plan for Iterations 4 to 8. | Scope cuts |
 | 5 | Closed on 2026-11-07: the pasted recommendations came from AI, debated and validated with Gemini Flash and researched with Google AI (`AI-USAGE.md`). | Nothing |
 | 6 | The owner asked for documentation of each TTL tested, once tests cover them. Today the suite runs one TTL, the 900 second default, with the clock pinned around `validUntil`. The pinnable clock stays test-only. | Nothing yet |
@@ -127,8 +129,8 @@ The notes hold the detail. These are the ones an implementation most easily brea
 | 4 | Booking and reconciliation | US-07, US-08 | Every row of `CONTRACT_NOTES.md` 2.8 has a test, including a crash after commit | ✓ Merged (2.11) |
 | 5 | Documents | US-09, US-10 | No missing or partial file is ever reported as ready | ✓ Merged (2.12) |
 | 6 | MCP layer, assistant and evaluations | US-11, US-12 | Tools enforce the acting user's permissions, and deterministic evaluations run without a model | ✓ Merged through #11 (2.14) |
-| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | ✓ Merged through #10 (2.13). The assistant panel is a session of its own (2.5) |
-| 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | |
+| 7 | Minimal frontend | All workflows | Every required workflow and failure state can be completed in the UI | ✓ Merged through #10 (2.13). The assistant panel is a session of its own (2.15) |
+| 8 | Delivery | Guide deliverables | A clean clone runs from the README, and the demo scenarios reproduce | Built, in its own pull request (2.16) |
 
 **Plan to the deadline,** approved by the owner on 2026-11-07 at 20:40 (UTC-3). The deadline is Sunday 2026-11-08, 09:00.
 
@@ -800,3 +802,61 @@ Built on branch `claude/iteration-6-mcp-assistant-599778`, from `main` at `eab85
 **Open for the owner:** model mode with a real key, 1.4 item 17.
 
 **Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the nine that start at "MCP protocol errors keep JSON-RPC's shape", and the `ApiError` limit, rewritten.
+
+### 2.15 Assistant panel record
+
+Built in a parallel session, in `web/` only, on the second revised plan (2.2), with its own pull request. That session edits no document: it reports its result, tests, controls and AI mistakes to the delivery session, which records them here.
+
+Built on branch `claude/assistant-panel-4ac197`, committed as `9bba422`, in pull request #14 into `main` with Auto-fix on. CI was pending when this was written. It merges before Iteration 8 (2.2). Only `web/` changed: `src/types.ts`, the `AssistantPanel` in `src/sections.tsx`, the ask and its state in `src/TripPage.tsx`, `tests/assistant.test.tsx` (new, 5 tests) and one test added to `e2e/travelplanner.spec.ts`. No `app/` change, no dependency, no `dangerouslySetInnerHTML`.
+
+**Roles as run:** `dev-principal` wrote `web/src`. Codex wrote the tests, in two runs with no usage limit, and reviewed `web/src` read-only: 1 major, fixed. `dev-principal` reviewed Codex's tests: 2 majors and 4 minors, applied except one minor (a `waitFor` on the request). `qa-ux` reviewed the UI: 4 minors, verdict ship; 3 are limits in `ARCHITECTURE.md`, and 1 needs no change.
+
+**Evidence,** as the panel session reported it. The delivery session did not rerun it
+
+| Check | Result |
+|---|---|
+| `npx vitest run` | 25 of 25 (20 old, 5 new). `npx tsc --noEmit` clean |
+| Playwright on the compose e2e stack, built from the panel's worktree | 7 of 7 in 19.3 s. An earlier run hit the delivery session's stack by mistake and is discarded (`AI-USAGE.md`) |
+| Vitest controls, one single-line mutant of `web/src` at a time | 7 of 7 killed, each by the test it names. M3 (the `(tool error)` mark dropped) survived first and was killed after the fixture was restored |
+| e2e control | A scratch copy with the mock's fault at 503 failed on `not.toContainText("failed")`, as stated |
+
+### 2.16 Iteration 8 record
+
+Built on branch `claude/iteration-8-delivery-face4f`, from `main` at `9cc75d2` (CI green on all three jobs, as on `f25a78f`). Documentation only: no file under `app/`, `tests/`, `provider-mock/`, `web/` or `contracts/` changed.
+
+**Decisions taken by the owner on 2026-11-08 at about 08:28 (UTC-3),** all five as recommended.
+
+| # | Decision | Outcome |
+|---|---|---|
+| 1 | Deployment (1.4, item 3) | Azure Container Apps, a proposal only: `web` public, `app` and the mock internal, `migrate` as a job before each revision, PostgreSQL Flexible Server, Key Vault, ACR from GitHub Actions. AKS and a single VM rejected, the VM kept as a fallback |
+| 2 | `DEMO.md` scenarios | S1 main workflow, S2 partial and failed searches, S3 stale edit 409, S4 `unknown` then retry, S5 pending to confirmed and failed with unavailable beside them, S6 document generation, S7 the assistant's E1 and E3. Browser steps, with `curl` for the mock's control interface and the assistant |
+| 3 | What the clean clone proves | The stack builds from committed files only, migrates empty volumes, every service gets healthy, and the scenarios reproduce. Not the suite (CI runs it on every push), not the e2e (manual), not model mode (no key) |
+| 4 | Roles | Claude Sonnet (`dev-principal`) wrote the three documents, Codex reviewed once, read-only. The Director wrote this file and the `AI-USAGE.md` entry |
+| 5 | Cut rule | Close at 08:42 with what is done, mark the rest unverified, open the pull request by 08:45 |
+
+**What the probes found:** the control interface is off by default, so the demo starts with `MOCK_CONTROL_ENABLED=1` (or `.env`, which also works in PowerShell). `offer-hotel-005` cannot be added while unavailable (`409 OFFER_UNAVAILABLE` on add), so the demo makes it available, adds it, then makes it unavailable, as the e2e does.
+
+**Clean clone of `main`,** `git clone --branch main` from GitHub into a temporary directory, 0 untracked files, `MOCK_CONTROL_ENABLED=1 docker compose -p tp-clean up -d --build --wait`
+
+| Check | Result |
+|---|---|
+| Build and start, no cache of this clone | All five services healthy in 95 s; `migrate` exited 0 |
+| S2 searches over the API | Lisbon `complete`, Porto `partial`, Coimbra `partial`, Evora `failed`, an unknown city `empty` |
+| S3 | Two PATCHes with one `version`: 200, then 409 `VERSION_CONFLICT` with `details.current` |
+| S1 | `offer-hotel-001` booked: 201 `confirmed`, budget line `priceKind: confirmed`. Document `complete` within seconds, downloaded by the viewer (200), and the viewer's request refused (403) |
+| S5 | `offer-hotel-002` and `-003` `pending`, `-004` `failed` at once; after 14 s, `-002` `confirmed` and `-003` `failed` with no user action |
+| S4 | Fault 503: 201 `unknown`. Fault cleared, retry: 200 `confirmed` with the same `clientReference` |
+| S7 | As a viewer, E1: 200 `deterministic`, `toolCalls` `get_itinerary`, `get_trip`, `search_options`. E3 with fault 503: the answer says the Lisbon search failed and recommends nothing |
+| Web | `GET /` 200 through nginx |
+| `docker compose -p tp-clean down -v` | Clean |
+| Rerun, 08:36 to 08:38 | The first run overlapped the panel session's Playwright run, which reached this stack's control interface by mistake (`AI-USAGE.md`). Rerun alone after both stacks were down, with the layer cache: up in 35 s, the same results on every row. The S3 and S7 `curl` blocks of `DEMO.md`, run as written: 409 `VERSION_CONFLICT`, and `deterministic` with `get_itinerary`, `get_trip`, `search_options`. The S7 block first broke on a blank line inside a `\` continuation, left by a line-ending fix, and was corrected |
+
+The script is `i8-demo_smoke.py` in the session group's notes folder, outside the repository. The restart in S1 step 9 was not measured here: `tests/compose_smoke.py` proves survival across replaced containers, in CI on every push.
+
+**Cross-review:** one round. Codex, read-only, with no `usage limit` in its log, found 0 blockers, 5 majors and 1 minor in the three documents. The Director checked each against the code, and Sonnet fixed all six (`AI-USAGE.md`). The Director also checked every test name and UI text `DEMO.md` cites against `tests/` and `web/src`.
+
+**Guide deliverables, checked:** the repository with frontend, backend, mock, MCP layer, assistant and tests; the contract unchanged (`git diff -- contracts/` empty); sample data and steps to reproduce (`provider-mock/README.md`, `DEMO.md`); example configuration (`.env.example`); a README with setup, checks, tests, evaluations and the proposed deployment; `ARCHITECTURE.md`; `DEMO.md`; the harness and `AI-USAGE.md`. Known gaps, named rather than presented as done: model mode never ran against the real API (1.4, item 17), the e2e and the mutation check are manual, and the assistant panel is in its own pull request (2.15).
+
+**Not run in this iteration:** the full suite and the mutation check (no code changed; CI runs the suite on every push), and the browser steps of `DEMO.md` (the scenarios were run over the API; the e2e covers the browser).
+
+**Limits accepted:** "Limits I accept" in `ARCHITECTURE.md`, the deployment bullets that start at "Deployment is a proposal".

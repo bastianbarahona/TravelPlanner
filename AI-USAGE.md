@@ -12,12 +12,38 @@ How AI is used in this repository and how its output is verified. The log record
 | Role matrix and protocol | `CLAUDE.md`, "Multi-model assistant protocol (PAL)" | |
 | Director: `director-proyecto` | `.claude/agents/` | Claude Code, Opus, high effort |
 | Dev and QA: `dev-principal`, `qa-lead` | `.claude/agents/` | Claude Code, Sonnet, high effort |
+| QA and UI/UX, Codex's stand-in: `qa-ux` | `.claude/agents/` | Claude Code, Sonnet, high effort, a separate instance |
 | Codex for Dev and QA | `codex exec` with `-C`, `-s` and `< /dev/null` | The Codex CLI with a ChatGPT subscription |
 | PAL's API tools, optional | `codereview`, `secaudit`, `consensus` and others | The `pal` MCP server, registered at user level, and an OpenAI API key with balance |
 
 None of this is an application dependency.
 
 ## Log
+
+### 2026-11-08: Iteration 8, delivery
+
+**Way of working:** the Director (Claude Code, Opus) probed first, then briefed Claude Sonnet (`dev-principal`), which wrote `README.md`, `DEMO.md` and the deployment section of `ARCHITECTURE.md`. Codex reviewed them once, read-only (`codex exec -s read-only`, no `usage limit` in its log). The Director wrote `docs/STATUS.md` and this entry, and checked every test name and UI text that `DEMO.md` cites against `tests/` and `web/src`.
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `README.md`, `DEMO.md`, `ARCHITECTURE.md` | Claude Sonnet | Codex | 0, 5, 1 | All six verified by the Director, fixed by Sonnet |
+| The scenario steps | Claude Sonnet | The Director, over the API on a clean clone | 1 fact missing | Supplied before review: `offer-hotel-005` cannot be added while unavailable |
+
+**Where the assistant was wrong**
+
+- **Sonnet wrote steps that do not run as written,** found by Codex: a PATCH body with a literal `V` for the version (invalid JSON), a browser conflict whose page loads after the change it should conflict with, `$TRIP` reused from another scenario, the e2e teardown run from `web/` with repository-relative paths, and a "Proved by" that cites tests covering only part of the scenario. Fixed in the documents.
+- **Sonnet claimed the assistant panel was built** when it was not yet in `main`, from the Director's own brief, which had said "built in a parallel session". Found by Codex, which read `web/src`. Reworded.
+- **Two sessions shared host ports and their messages crossed.** The panel session's Playwright run started its own stack, failed on port 4010, and then ran its 7 tests against the delivery session's clean-clone stack, whose control interface was on. Its resets and faults reached that mock during the first scenario run. Detected by the panel session, which reported it. The scenario run was repeated after both stacks were down. Lesson: a heavy job checks that the ports are free and that its own stack is the one answering, and does not fall back to whatever is on the port.
+
+**The assistant panel, in its parallel session** (`docs/STATUS.md` 2.15). `dev-principal` wrote `web/src`, Codex wrote the tests, and each reviewed the other once. `qa-ux` reviewed the UI.
+
+- `dev-principal` rendered an empty tool list as a `<p>` where the spec said a `<ul>`. Found by Codex's review, fixed.
+- Codex's fix round renamed the fixture tools and dropped the `isError: true` call, so "(tool error)" was no longer tested. Found when mutant M3 survived. The Director restored it, and M3 died.
+- Codex asserted `toHaveCount(1)` on every tool call in the e2e, but the real run also calls `get_itinerary`. Found by the Director reading the test before running it, changed to a filter on text.
+- Codex's first 503 test claimed to catch stale answers, but no answer existed before the failure, so it could not fail for that. Found by `dev-principal`, rewritten as success, then 503, then retry.
+- Codex's first e2e passed even when the search failed. Found by `dev-principal`; it now requires `search_options`, `data-error=false` and no "failed", proven by an e2e control.
+- The panel Director ran Playwright without checking that its own `compose up` had succeeded (the crossing above).
+- Codex could not run Vitest in its sandbox (`EPERM` on `node_modules/.vite-temp`), so every count is from the Director's run.
 
 ### 2026-11-08: Iteration 7, minimal frontend
 

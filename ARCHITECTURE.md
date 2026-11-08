@@ -1,6 +1,6 @@
 # Architecture
 
-Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, documents, the read-only MCP layer, the assistant and the web frontend exist. Anything here about a later iteration is a commitment, not built behavior.
+Decisions, alternatives, guarantees, limits, risks and scaling. This file grows with each iteration. The provider mock, the application core, the provider client, search, the itinerary, the budget, bookings and their reconciliation, documents, the read-only MCP layer, the assistant and the web frontend exist. A deployment proposal (Azure Container Apps) is recorded below and is not deployed. Anything here about a later iteration or the deployment is a commitment, not built behavior.
 
 The table of decisions in `CLAUDE.md` is the short version. This file holds the reasoning.
 
@@ -191,6 +191,25 @@ Tested on 24 invalid offers: the schema with formats rejected 22, and the two it
 
 **Evaluations:** `tests/assistant_evals.py` runs fixed cases (E1 to E7) against real processes and scores each with binary checks: the expected tools were called, every amount and offer id in the answer appears in a tool result (`grounded`), "no suitable option" when nothing fits, failures disclosed, issues mentioned, outsiders refused, and no state change. The tool results are replayed through MCP as the same user after the answer, independent of it. Deterministic mode must score 100% in the suite. Model mode runs the same cases on request and is never part of CI. Each check has a control that proves it rejects a bad answer.
 
+### Deployment (proposed, not deployed)
+
+**Decision:** Azure Container Apps. Approved by the owner on 2026-11-08. Nothing is deployed, and none of it has run in Azure.
+
+**Shape:**
+
+- `web` has the external ingress. `app` and the provider mock are internal. A real provider replaces the mock: only `PROVIDER_BASE_URL` and `PROVIDER_TOKEN` change.
+- `migrate` is a Container Apps Job, run before each new revision. The application never migrates itself: two concurrent upgrades failed 8 of 8 (Migrations).
+- Azure Database for PostgreSQL Flexible Server holds the data.
+- Secrets (`APP_TOKENS`, `PROVIDER_TOKEN`, `ANTHROPIC_API_KEY` and the database URL) live in Key Vault, referenced as Container Apps secrets.
+- GitHub Actions pushes the images to Azure Container Registry after CI passes.
+- Probes: liveness `GET /health`, readiness `GET /ready`.
+
+**Replicas:** the booking poller and the document worker run in every replica. `SKIP LOCKED` prevents double work, but each replica polls on its own, so keep replicas few, or move both loops to a separate worker app built from the same image (the growth path above).
+
+**Required change:** `web/nginx.conf` resolves `app` through Docker's resolver, `127.0.0.11`. That address does not exist in Container Apps, so the resolver line and the upstream host must change before it runs there.
+
+**Rejected:** AKS, because its operational load buys nothing at this size. A single VM running Compose is the cheapest, but it has no managed database and no rolling revisions. It stays a valid fallback.
+
 ## Proposals recorded, not adopted
 
 From the owner's notes. They belong to later iterations and stay open until then.
@@ -279,7 +298,7 @@ Application, each proven over real HTTP against real Postgres:
 - **The model client is built per question,** with the SDK's own retries. Reuse one client, and stream, if latency matters.
 - **Rules of the assistant that no test mutates:** the guard that stops on a sixth tool, `cache=None`, the 8-turn cap, the tool's own 401 behind the guard, the narrowed `TypeError`, and that the assistant forwards its caller's token rather than another valid one. Each is enforced in `app/assistant/assistant.py` and `app/mcp/server.py`, and none has a cheap test.
 - **Model mode is not evaluated in CI.** It needs a key and costs money per run. Its cost and score are measured when a key is supplied (`README.md`, Evaluations).
-- **Migrations run online only.** Offline SQL scripts are not needed while the deploy runs `upgrade head` itself.
+- **Migrations run online only,** by the one-shot `migrate` service in Compose and, in the proposal, by a Container Apps Job before each revision. Offline SQL scripts are not needed.
 - **One provider client per process, never closed.** The process exit closes its sockets. Add a lifespan hook if the client is ever restarted in-process.
 - **Overlaps compare every pair of items, O(n²).** That is fine for tens of items. Sort by start and sweep if an itinerary grows large.
 - **One version per trip.** An organizer's edit to the trip makes an editor's pending itinerary edit stale, and the reverse. Each gets a 409 with the current state, at the cost of one more request.
@@ -316,7 +335,14 @@ Application, each proven over real HTTP against real Postgres:
 - **The e2e suite is manual,** like the mutation check. It is not in CI, because it needs the whole compose stack. It binds the host ports 8080, 8000 and 4010, so it cannot run beside another stack on them.
 - **Images are pinned by tag, not by digest** (`node:24-alpine`, `nginx:1.27-alpine`). A rebuild can pick up a patched image or a changed one. Pin digests when builds must be reproducible.
 - **nginx adds no security headers** (no CSP, no `X-Frame-Options`) beyond what the application sends on its own responses. The page loads one script from its own origin and renders every string as text, so React's escaping is the defense. Add the headers before the page is exposed beyond a demo.
-- **The assistant panel is not built.** US-11 joins after Iteration 6 merges.
+- **The assistant panel ships in its own pull request,** built in a parallel session; until it merges, `main` has the route and no panel (`docs/STATUS.md` 2.15).
+- **The assistant call is a POST,** so a network failure or timeout shows the write hint "The request may have been received". The call is read-only, so repeating it is safe. The browser aborts at 30 s, and a slow model-mode answer could exceed it: give the assistant its own timeout or hint when model mode is used.
+- **A failed assistant call that arrives after an identity switch still shows its alert,** like every other action on the page. Only a late success is dropped.
+- **Blank lines in an assistant answer render as empty paragraphs.** The text stays verbatim.
+- **Deployment is a proposal.** Nothing was deployed or tested in Azure, so every claim in "Deployment (proposed, not deployed)" is unverified there.
+- **Test identities must be replaced by a real identity provider before any exposure beyond a demo.** `APP_TOKENS` is a fixed list of known tokens.
+- **MCP admits loopback hosts only,** so an external MCP client behind a public host name is refused until its host is allowed (see the MCP limit above).
+- **The nginx resolver line is Docker-specific** (`127.0.0.11`) and must change for Container Apps.
 
 The mock's limits are in `docs/STATUS.md`, Section 2.6.
 

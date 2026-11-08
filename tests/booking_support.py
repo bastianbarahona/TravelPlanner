@@ -5,7 +5,7 @@ from copy import deepcopy
 import httpx
 from sqlalchemy import text
 
-from app_support import StubResponse
+from app_support import StubResponse, create_planning_trip
 from support import HTTP_OPTIONS, TOKEN_A
 
 
@@ -150,3 +150,30 @@ def forward(mock_url, request):
     if "retry-after" in response.headers:
         reply_headers["retry-after"] = response.headers["retry-after"]
     return StubResponse(response.status_code, response.content, reply_headers)
+
+
+def seed_booked_trip(client):
+    """A trip with one confirmed booking and one waiting document, so "state unchanged" compares real rows.
+    Start the app with BOOKING_POLL_ENABLED=0 and DOCUMENT_WORKER_ENABLED=0 so nothing moves them on its own."""
+    trip = create_planning_trip(client)
+    _, item = add_item(client, trip["id"], 1, "offer-hotel-001")
+    booked = book_item(client, trip["id"], item)
+    assert booked.status_code == 201 and booked.json()["state"] == "confirmed", booked.text
+    document = client.post(f"/trips/{trip['id']}/documents")
+    assert document.status_code == 202, document.text
+    return trip
+
+
+def state_snapshot(client, trip_id, db_engine):
+    """The trip, itinerary and documents as the API shows them, and every booking_attempts and documents row in full."""
+    with db_engine.connect() as connection:
+        attempts = [dict(row) for row in connection.execute(text("SELECT * FROM booking_attempts ORDER BY id")).mappings()]
+        documents = [dict(row) for row in connection.execute(text("SELECT * FROM documents ORDER BY id")).mappings()]
+    assert attempts and documents, "the snapshot must compare rows, not empty tables"
+    return {
+        "trip": client.get(f"/trips/{trip_id}").json(),
+        "itinerary": client.get(f"/trips/{trip_id}/itinerary").json(),
+        "documents": client.get(f"/trips/{trip_id}/documents").json(),
+        "bookingAttempts": attempts,
+        "documentRows": documents,
+    }

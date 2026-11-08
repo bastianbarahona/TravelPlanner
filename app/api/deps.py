@@ -20,22 +20,29 @@ class Access(NamedTuple):
     trip_id: UUID
 
 
-def current_user(request: Request):
-    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+def bearer_user(authorization):
+    """The user a bearer token names, or None. `current_user` and the /mcp guard (app/main.py) both read it."""
+    scheme, _, token = authorization.partition(" ")
     # ponytail: a plain dict lookup of the test identities in APP_TOKENS. Not constant time, which does
     # not matter for fixed test tokens. A real identity provider replaces this function, and the places that read
     # the configured identities: `_known` in app/api/schemas.py and `known_user` below.
-    user = TOKENS.get(token) if scheme.lower() == "bearer" else None
+    return TOKENS.get(token) if scheme.lower() == "bearer" else None
+
+
+def unauthorized():
+    return ApiError(401, "UNAUTHORIZED", "The bearer token is missing or invalid.", headers={"WWW-Authenticate": "Bearer"})
+
+
+def current_user(request: Request):
+    user = bearer_user(request.headers.get("authorization", ""))
     if user is None:
-        raise ApiError(
-            401, "UNAUTHORIZED", "The bearer token is missing or invalid.", headers={"WWW-Authenticate": "Bearer"}
-        )
+        raise unauthorized()
     return user
 
 
-def trip_member(tripId: str, user: str = Depends(current_user), session=Depends(get_session)):
+def membership(session, user, tripId):
     """Nonparticipant, missing trip and malformed id are the same 404. The id is parsed here:
-    a raw string on a UUID column raises DataError, a 500."""
+    a raw string on a UUID column raises DataError, a 500. The API (`trip_member`) and the MCP tools both call it."""
     try:
         trip_id = UUID(tripId)
     except ValueError:
@@ -48,6 +55,10 @@ def trip_member(tripId: str, user: str = Depends(current_user), session=Depends(
     if role is None:
         raise not_found()
     return Access(user, role, trip_id)
+
+
+def trip_member(tripId: str, user: str = Depends(current_user), session=Depends(get_session)):
+    return membership(session, user, tripId)
 
 
 def trip_organizer(access: Access = Depends(trip_member)):

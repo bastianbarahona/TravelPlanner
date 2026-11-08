@@ -550,6 +550,13 @@ Built in parallel with Iteration 4, on branch `claude/wonderful-matsumoto-ba20cf
 - **What it costs:** every fix commit on PR A needs a new merge into PR B and another CI run.
 - **The alternative:** merge PR A first, then `sync_with_base_branch` and PR B into `main`. It is simpler and loses that overlap.
 
+**As it ran:**
+
+- PR A is #6 and PR B is #7.
+- #6 was merged into `main` as `7a686d5`. Then #7 was merged into the Iteration 4 branch as `20bff82`, without step 5, so `main` did not get Iteration 5.
+- #8 brings the same head, `a3d1af7`, into `main`. Its diff is Iteration 5 and the merge only, it merges clean, and CI is green on that commit. Auto-fix is on.
+- Lesson for the next cascade: retarget PR B as soon as PR A merges, or open PR B against `main` from the start, once PR A is merged.
+
 **Required tests**
 
 | # | Required test | Where, in `tests/test_app_documents.py` |

@@ -51,6 +51,7 @@ None of this is an application dependency.
 | Director | Staged the resolved files before `qa-ux` fixed two tests, so the index held the failing versions | Codex's review of the merge (`MM` and `AM` in `git status`) | Staged again before the merge commit |
 | `qa-ux` | Its race test copied an existing offer, which Iteration 4's one-item-per-offer index refuses. Iteration 4's own migration test expected `0003` to stay the head | The Director's first run after the merge: 2 failed | A distinct offer id, and an assertion of one linear head |
 | `qa-ux` | Wrote real newlines into two mutation anchors, a `SyntaxError` | Its own compile check | Escaped |
+| Director | Opened PR #7 stacked on #6, but did not retarget it when #6 merged, so #7 was merged into the Iteration 4 branch and `main` missed Iteration 5. The plan named the step and nobody ran it | `gh pr view` after the owner's merge: #7 based on the Iteration 4 branch | #8, the same head into `main` |
 
 **Tooling:** Codex answered `You've hit your usage limit ... try again at Nov 8th, 2026 12:48 AM`. The same account serves Iteration 4, which was told through the shared session notes.
 

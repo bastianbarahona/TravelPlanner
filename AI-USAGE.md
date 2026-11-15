@@ -20,6 +20,22 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-14: After submission, the model-mode measurement
+
+**Context:** this work is on the branch `post-submission/model-mode-eval`, after the submission. The tag `submission-2026-11-08` marks the submitted commit (`a3720a4`), and `main` does not change. Its goal is to close the one gap the README declared: the assistant's model mode had never run against the real API.
+
+**Way of working:** the Director (Claude Code, Opus) wrote a `--dump` flag for `tests/assistant_evals.py`, so every case's question, answer, tool calls, tool results, checks and latency can be read by hand. Codex reviewed it once, read-only (`codex exec -s read-only`, no `usage limit` in its log). `app/` and `contracts/` did not change.
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `--dump` in `tests/assistant_evals.py` and its tests | Director | Codex | 0, 3, 0 | 2 accepted, 1 replaced by a narrower guard |
+
+**Where an assistant was wrong**
+
+- **The Director's first dump left E7 without tool results,** because the delivered E7 never replayed them (its read-only check does not need them). Found by Codex. E7 now replays its calls after the compared window, and the test requires one result per call. A mutant that empties E7's results fails the test.
+- **The Director's first test never read `toolResults`,** so a dump without them still passed. Found by Codex, fixed with the same assertion.
+- **Codex asked for a recursive redactor of every secret-shaped value.** That was over-scoped: the API key never reaches a question, an answer or a tool result, and the bearer tokens are test identities that travel only in headers. Replaced by a guard on the one real secret: the dump is not written if it holds the value of `ANTHROPIC_API_KEY`, with a test.
+
 ### 2026-11-08: Iteration 8, delivery
 
 **Way of working:** the Director (Claude Code, Opus) probed first, then briefed Claude Sonnet (`dev-principal`), which wrote `README.md`, `DEMO.md` and the deployment section of `ARCHITECTURE.md`. Codex reviewed them once, read-only (`codex exec -s read-only`, no `usage limit` in its log). The Director wrote `docs/STATUS.md` and this entry, and checked every test name and UI text that `DEMO.md` cites against `tests/` and `web/src`.

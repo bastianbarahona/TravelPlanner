@@ -1,14 +1,19 @@
 """Reproducible Iteration 6 assistant evaluations.
 
 Run from the repository root:
-    python tests/assistant_evals.py [--mode deterministic|anthropic]
+    python tests/assistant_evals.py [--mode deterministic|anthropic] [--dump results.json]
+
+`--dump` writes every case's question, answer, tool calls, tool results, checks and the assistant call's seconds, so a
+failed check can be read by hand: in model mode a check can fail on wording while the answer is right.
 """
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 import tempfile
+import time
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -46,6 +51,8 @@ AMOUNT = re.compile(r"(?<![\d.])\d+\.\d{2}(?!\d)")
 class Observation:
     case_id: str
     trip_id: str = ""
+    question: str = ""
+    seconds: float = 0.0  # the assistant route's call alone, without the case's setup
     answer: str = ""
     route_status: int = 200
     route_body: object = field(default_factory=dict)
@@ -303,6 +310,13 @@ def replay_results(base_url, user, calls):
     ]
 
 
+def ask(client, trip_id, question):
+    """The assistant call, timed: in model mode its latency is part of the result."""
+    started = time.perf_counter()
+    response = client.post(f"/trips/{trip_id}/assistant", json={"question": question})
+    return response, time.perf_counter() - started
+
+
 def reset_database(engine):
     with engine.begin() as connection:
         connection.execute(
@@ -341,7 +355,7 @@ def normal_observation(
         control.fault(fault)
 
     with app_client(process.url, "ben") as viewer:
-        response = viewer.post(f"/trips/{trip['id']}/assistant", json={"question": question})
+        response, seconds = ask(viewer, trip["id"], question)
     try:
         body = response.json()
     except ValueError:
@@ -351,6 +365,8 @@ def normal_observation(
     return Observation(
         case_id=case_id,
         trip_id=trip["id"],
+        question=question,
+        seconds=seconds,
         answer=body.get("answer", response.text),
         route_status=response.status_code,
         route_body=body,
@@ -419,10 +435,9 @@ def evaluate_case(case_id, process, engine, control):
     if case_id == "E6":
         with app_client(process.url) as owner:
             trip = create_planning_trip(owner)
+        question = "What is the budget?"
         with app_client(process.url, "dee") as outsider:
-            response = outsider.post(
-                f"/trips/{trip['id']}/assistant", json={"question": "What is the budget?"}
-            )
+            response, seconds = ask(outsider, trip["id"], question)
         result = mcp_call(process.url, "dee", "get_trip", {"trip_id": trip["id"]})
         text_content = "\n".join(
             content.text for content in result.content if hasattr(content, "text")
@@ -432,6 +447,8 @@ def evaluate_case(case_id, process, engine, control):
         return Observation(
             case_id=case_id,
             trip_id=trip["id"],
+            question=question,
+            seconds=seconds,
             answer=response.text,
             route_status=response.status_code,
             route_body=response.json(),
@@ -446,17 +463,23 @@ def evaluate_case(case_id, process, engine, control):
         with app_client(process.url, "ben") as viewer:
             before = state_snapshot(viewer, trip["id"], engine)
             # A hotel question, so search_options runs inside the compared window.
-            response = viewer.post(f"/trips/{trip['id']}/assistant", json={"question": "Find a hotel"})
+            question = "Find a hotel"
+            response, seconds = ask(viewer, trip["id"], question)
             tools = listed_tools(process.url, "ben")
             after = state_snapshot(viewer, trip["id"], engine)
         body = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        calls = body.get("toolCalls", [])
         return Observation(
             case_id=case_id,
             trip_id=trip["id"],
+            question=question,
+            seconds=seconds,
             answer=body.get("answer", response.text),
             route_status=response.status_code,
             route_body=body,
-            tool_calls=body.get("toolCalls", []),
+            tool_calls=calls,
+            # Replayed after the compared window, so the read-only check is unchanged; only the dump reads them.
+            tool_results=replay_results(process.url, "ben", calls) if calls else [],
             expected_categories=("accommodation",),
             listed_tools=tools,
             before_state=before,
@@ -483,7 +506,33 @@ def print_report(report, stream=sys.stdout):
             print(f"{name}: {passed}/{len(rows)}", file=stream)
 
 
-def run_evaluations(mode="deterministic", stream=sys.stdout):
+def write_dump(path, mode, observations, results):
+    """One JSON file for reading failures by hand. `assistantModel` null means the application's default."""
+    cases = [
+        {
+            "caseId": observation.case_id,
+            "scenario": CASE_NAMES[observation.case_id],
+            "question": observation.question,
+            "routeStatus": observation.route_status,
+            "seconds": round(observation.seconds, 3),
+            "answer": observation.answer,
+            "toolCalls": observation.tool_calls,
+            "toolResults": observation.tool_results,
+            "checks": {r.check: r.passed for r in results if r.case_id == observation.case_id},
+        }
+        for observation in observations
+    ]
+    document = {"mode": mode, "assistantModel": os.environ.get("ASSISTANT_MODEL"), "cases": cases}
+    serialized = json.dumps(document, indent=2, ensure_ascii=False)
+    # ponytail: guards the one real secret of a model run. The key never reaches a question, answer or tool result,
+    # and the bearer tokens are test identities in headers only, so a generic redactor would guard nothing real.
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if key and key in serialized:
+        raise RuntimeError("the dump holds ANTHROPIC_API_KEY; nothing was written")
+    Path(path).write_text(serialized, encoding="utf-8")
+
+
+def run_evaluations(mode="deterministic", stream=sys.stdout, dump=None):
     if mode not in {"deterministic", "anthropic"}:
         raise ValueError("mode must be deterministic or anthropic")
     postgres = PostgresProcess()
@@ -521,6 +570,8 @@ def run_evaluations(mode="deterministic", stream=sys.stdout):
             ]
             report = EvaluationReport(mode, results)
             print_report(report, stream)
+            if dump is not None:
+                write_dump(dump, mode, observations, results)
             return report
         finally:
             if engine is not None:
@@ -535,8 +586,9 @@ def run_evaluations(mode="deterministic", stream=sys.stdout):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("deterministic", "anthropic"), default="deterministic")
+    parser.add_argument("--dump", help="write every case's question, answer, tool calls and checks to this JSON file")
     arguments = parser.parse_args(argv)
-    report = run_evaluations(arguments.mode)
+    report = run_evaluations(arguments.mode, dump=arguments.dump)
     return 1 if arguments.mode == "deterministic" and report.failed else 0
 
 

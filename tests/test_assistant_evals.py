@@ -3,8 +3,11 @@
 Each control starts from a baseline observation the check accepts, then changes one thing. The baseline passing proves
 the control fails for that one change and not for something else.
 """
+import json
 from dataclasses import replace
 from types import SimpleNamespace
+
+import pytest
 
 from assistant_evals import (
     TOOL_NAMES,
@@ -18,6 +21,7 @@ from assistant_evals import (
     refuses_outsider,
     run_evaluations,
     says_no_option,
+    write_dump,
 )
 
 CHECK_NAMES = {
@@ -49,13 +53,34 @@ EXPECTED_RESULTS = [
 ]
 
 
-def test_deterministic_evaluation_scores_exactly_the_expected_checks_at_100_percent():
-    report = run_evaluations("deterministic")
+def test_deterministic_evaluation_scores_exactly_the_expected_checks_at_100_percent(tmp_path):
+    dump = tmp_path / "evals.json"
+    report = run_evaluations("deterministic", dump=dump)
     assert [(result.case_id, result.check) for result in report.results] == EXPECTED_RESULTS
     assert {result.check for result in report.results} == CHECK_NAMES
     assert len(report.results) == 16
     assert report.failed == []
     assert report.passed == 16
+
+    # The dump is what a failed model-mode check is read from: every case, its question, answer and checks.
+    cases = json.loads(dump.read_text(encoding="utf-8"))["cases"]
+    assert [case["caseId"] for case in cases] == ["E1", "E2", "E3", "E4", "E5", "E6", "E7"]
+    assert [(case["caseId"], check) for case in cases for check in case["checks"]] == EXPECTED_RESULTS
+    assert all(case["question"] and case["answer"] and case["seconds"] > 0 for case in cases)
+    tool_cases = [case for case in cases if case["caseId"] != "E6"]  # the outsider never reaches the tools
+    assert all(case["toolCalls"] for case in tool_cases)
+    assert all(len(case["toolResults"]) == len(case["toolCalls"]) for case in tool_cases)
+
+
+def test_dump_refuses_to_write_the_api_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-0123456789")
+    path = tmp_path / "evals.json"
+    leaking = Observation(case_id="E1", question="q", answer="the key is sk-ant-test-0123456789")
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        write_dump(path, "anthropic", [leaking], [])
+    assert not path.exists()
+    write_dump(path, "anthropic", [Observation(case_id="E1", question="q", answer="no secret here")], [])
+    assert "sk-ant-test" not in path.read_text(encoding="utf-8")
 
 
 # --- called_expected_tools -----------------------------------------------------------------------------------------

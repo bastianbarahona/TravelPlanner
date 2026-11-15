@@ -1,0 +1,1216 @@
+{
+  "mode": "anthropic",
+  "assistantModel": null,
+  "cases": [
+    {
+      "caseId": "E1",
+      "scenario": "grounded hotel",
+      "question": "Please recommend a hotel for Lisbon",
+      "routeStatus": 200,
+      "seconds": 7.98,
+      "answer": "**My recommendation: the three-night central hotel stay (offer-hotel-001, supplier-a), at an estimated $420.00 total.**\n\n- **Fit:** It's one room for two travelers, with breakfast included. Check-in is June 10 at 15:00 and check-out is June 13 at 11:00, so it covers your whole trip (June 10–13) for 2 travelers.\n- **Budget:** The $420.00 is the total for the whole party and stay. It would leave about $1,580 of your $2,000 budget. Nothing else is planned yet.\n- **Availability:** It's available and the quote hasn't expired. The quote is valid until 2030-01-15 12:15 UTC, and the search ran at 12:00 UTC, so it expires soon.\n- **Restriction:** The booking is non-refundable.\n\n**Other options**\n- **Riverside apartment (offer-hotel-002, supplier-c), $610.50:** It's available and fits the dates. It costs more and has no breakfast listed. Its title says it is \"confirmed after a short wait\".\n- **Guesthouse (offer-hotel-003, supplier-b), $380.00:** It's the cheapest private room, but the title says it \"fails after a short wait\", so I wouldn't rely on it.\n- **Hostel (offer-hotel-004, supplier-c), $350.00:** It's a shared dormitory, and the title says it \"fails immediately\". I'd avoid it.\n- **Boutique hotel (offer-hotel-005, supplier-b), $300.00:** It's sold out.\n\nThese prices are provider estimates, not bookings. I'm read-only, so I can't book or save anything. Your role on this trip is viewer, so the organizer (Ana) would need to add the stay to the itinerary.",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "4a4554d5-bc80-4360-922e-f89c2dbf4b90"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "4a4554d5-bc80-4360-922e-f89c2dbf4b90"
+          },
+          "isError": false
+        },
+        {
+          "name": "search_options",
+          "arguments": {
+            "trip_id": "4a4554d5-bc80-4360-922e-f89c2dbf4b90",
+            "category": "accommodation"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "4a4554d5-bc80-4360-922e-f89c2dbf4b90",
+          "destinations": [
+            "Lisbon"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "2000.00",
+          "travelers": 2,
+          "version": 1,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "4a4554d5-bc80-4360-922e-f89c2dbf4b90",
+          "version": 1,
+          "items": [],
+          "issues": [
+            {
+              "code": "DESTINATION_WITHOUT_STAY",
+              "message": "No accommodation is planned in Lisbon.",
+              "itemIds": [],
+              "destination": "Lisbon"
+            }
+          ],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [],
+            "estimatedUsd": "0.00",
+            "confirmedUsd": "0.00",
+            "totalUsd": "0.00",
+            "budgetUsd": "2000.00",
+            "differenceUsd": "2000.00",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        },
+        {
+          "legs": [
+            {
+              "destination": "Lisbon",
+              "status": "complete",
+              "options": [
+                {
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-c92894c332c04c3c8b55e905ba92586c",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-002",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Riverside apartment, confirmed after a short wait",
+                    "description": "One apartment for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T16:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "610.50",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-e32181b3ee2041f086ee7a6a66b604c5",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-003",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Guesthouse, fails after a short wait",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "380.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-62aa91f0833d4444bce9c39c47b0b759",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-004",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Hostel, fails immediately",
+                    "description": "Two beds in a shared dormitory.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "350.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-77b1135bdb144b9c97ea6c47ea1a9bef",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-005",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Sold-out boutique hotel",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "300.00",
+                      "currency": "USD"
+                    },
+                    "available": false,
+                    "revision": "quote-9a36dd046aff4797833a0000b27be7f3",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": false
+                }
+              ],
+              "warnings": [],
+              "searchedAt": "2030-01-15T12:00:00Z"
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "grounded": true
+      }
+    },
+    {
+      "caseId": "E2",
+      "scenario": "nothing fits",
+      "question": "Please recommend a hotel for Lisbon",
+      "routeStatus": 200,
+      "seconds": 9.045,
+      "answer": "I recommend keeping the hotel already in your itinerary: **Three-night central hotel stay** (offer-hotel-001, supplier-a).\n\n- **Fit:** It's one room for two travelers, with breakfast included. Check-in is 10 June at 15:00 and check-out is 13 June at 11:00, which matches your 10–13 June trip.\n- **Price:** The estimate is $420.00 for the whole stay, which is exactly your $420.00 budget. It leaves $0.00 of headroom, but the trip isn't over budget.\n- **Availability:** It's available and bookable, and the quote is valid until 2030-01-15 12:15 UTC.\n- **Restriction:** The booking is non-refundable (simulated).\n\nI also looked at the other options the search returned:\n\n| Option | Price | Notes |\n|---|---|---|\n| Guesthouse (offer-hotel-003) | $380.00 | It's $40 under budget. Its title says it \"fails after a short wait\", so I wouldn't rely on it. |\n| Hostel (offer-hotel-004) | $350.00 | Shared dormitory. Its title says it \"fails immediately\". |\n| Riverside apartment (offer-hotel-002) | $610.50 | It's $190.50 over budget. |\n| Boutique hotel (offer-hotel-005) | $300.00 | Sold out. |\n\nAll prices are provider estimates, not bookings. I'm read-only, so I can't book or change anything. You're a viewer on this trip, so the organizer (Ana) would need to make any booking.",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "8313ea85-83c7-4f7e-9863-bd37df7b23c5"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "8313ea85-83c7-4f7e-9863-bd37df7b23c5"
+          },
+          "isError": false
+        },
+        {
+          "name": "search_options",
+          "arguments": {
+            "trip_id": "8313ea85-83c7-4f7e-9863-bd37df7b23c5",
+            "category": "accommodation"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "8313ea85-83c7-4f7e-9863-bd37df7b23c5",
+          "destinations": [
+            "Lisbon"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "420.00",
+          "travelers": 2,
+          "version": 2,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "8313ea85-83c7-4f7e-9863-bd37df7b23c5",
+          "version": 2,
+          "items": [
+            {
+              "id": "046c78ed-220d-4c7d-b558-3f228cbdea11",
+              "position": 0,
+              "offer": {
+                "id": "offer-hotel-001",
+                "price": {
+                  "amount": "420.00",
+                  "currency": "USD"
+                },
+                "title": "Three-night central hotel stay",
+                "endsAt": "2030-06-13T11:00:00+01:00",
+                "category": "accommodation",
+                "revision": "quote-39403f994ef6403f84ff47eabca5168d",
+                "startsAt": "2030-06-10T15:00:00+01:00",
+                "available": true,
+                "travelers": 2,
+                "providerId": "supplier-a",
+                "validUntil": "2030-01-15T12:15:00Z",
+                "description": "One room for two travelers, breakfast included.",
+                "destination": "Lisbon",
+                "restrictions": [
+                  "Non-refundable simulated booking"
+                ]
+              },
+              "priceKind": "estimate",
+              "expired": false,
+              "bookable": true
+            }
+          ],
+          "issues": [],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [
+              {
+                "itemId": "046c78ed-220d-4c7d-b558-3f228cbdea11",
+                "title": "Three-night central hotel stay",
+                "category": "accommodation",
+                "amountUsd": "420.00",
+                "priceKind": "estimate"
+              }
+            ],
+            "estimatedUsd": "420.00",
+            "confirmedUsd": "0.00",
+            "totalUsd": "420.00",
+            "budgetUsd": "420.00",
+            "differenceUsd": "0.00",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        },
+        {
+          "legs": [
+            {
+              "destination": "Lisbon",
+              "status": "complete",
+              "options": [
+                {
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-39403f994ef6403f84ff47eabca5168d",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-002",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Riverside apartment, confirmed after a short wait",
+                    "description": "One apartment for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T16:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "610.50",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-65184fc6b215410fbc02fbbac6db4a30",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-003",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Guesthouse, fails after a short wait",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "380.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-a7cd56d17f664f45ba658ed6ab0cd884",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-004",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Hostel, fails immediately",
+                    "description": "Two beds in a shared dormitory.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "350.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-904cf734d3984f4ab7be2585f802b254",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-005",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Sold-out boutique hotel",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "300.00",
+                      "currency": "USD"
+                    },
+                    "available": false,
+                    "revision": "quote-5a26f1239e714c4981cabcc0087fc2ff",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": false
+                }
+              ],
+              "warnings": [],
+              "searchedAt": "2030-01-15T12:00:00Z"
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "grounded": false,
+        "says_no_option": false
+      }
+    },
+    {
+      "caseId": "E3",
+      "scenario": "provider down",
+      "question": "Please recommend a hotel for Lisbon",
+      "routeStatus": 200,
+      "seconds": 8.652,
+      "answer": "I can't recommend a Lisbon hotel yet. I searched for accommodation twice, and both searches failed. The provider returned `PROVIDER_UNAVAILABLE` with the message \"The provider is temporarily unavailable. Try again later.\" No options or prices came back, and I won't guess at any.\n\nHere is what I did get from the trip:\n- **Trip:** Lisbon, 2030-06-10 to 2030-06-13 (3 nights), 2 travelers.\n- **Budget:** $2,000.00 in total. Nothing is planned or spent yet, so all $2,000.00 is still available.\n- **Open issue:** The itinerary flags `DESTINATION_WITHOUT_STAY`, because no accommodation is planned in Lisbon.\n\nPlease ask me again in a little while and I'll rerun the search. When it works, I'll check each option against those dates, the party of 2 and the remaining budget. Offer prices are totals for the whole stay and party, and they are only estimates until a booking confirms them.\n\nI'm read-only, so I can't book or add a hotel to the itinerary. You're a viewer on this trip, so the organizer (Ana) would need to make any changes.",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "17512365-dc10-432f-a7ae-1ac5f4345fbb"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "17512365-dc10-432f-a7ae-1ac5f4345fbb"
+          },
+          "isError": false
+        },
+        {
+          "name": "search_options",
+          "arguments": {
+            "trip_id": "17512365-dc10-432f-a7ae-1ac5f4345fbb",
+            "category": "accommodation"
+          },
+          "isError": false
+        },
+        {
+          "name": "search_options",
+          "arguments": {
+            "trip_id": "17512365-dc10-432f-a7ae-1ac5f4345fbb",
+            "category": "accommodation",
+            "destinations": [
+              "Lisbon"
+            ],
+            "starts_on": "2030-06-10",
+            "ends_on": "2030-06-13"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "17512365-dc10-432f-a7ae-1ac5f4345fbb",
+          "destinations": [
+            "Lisbon"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "2000.00",
+          "travelers": 2,
+          "version": 1,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "17512365-dc10-432f-a7ae-1ac5f4345fbb",
+          "version": 1,
+          "items": [],
+          "issues": [
+            {
+              "code": "DESTINATION_WITHOUT_STAY",
+              "message": "No accommodation is planned in Lisbon.",
+              "itemIds": [],
+              "destination": "Lisbon"
+            }
+          ],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [],
+            "estimatedUsd": "0.00",
+            "confirmedUsd": "0.00",
+            "totalUsd": "0.00",
+            "budgetUsd": "2000.00",
+            "differenceUsd": "2000.00",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        },
+        {
+          "legs": [
+            {
+              "destination": "Lisbon",
+              "status": "failed",
+              "options": [],
+              "warnings": [],
+              "error": {
+                "code": "PROVIDER_UNAVAILABLE",
+                "message": "The provider is temporarily unavailable. Try again later."
+              }
+            }
+          ]
+        },
+        {
+          "legs": [
+            {
+              "destination": "Lisbon",
+              "status": "failed",
+              "options": [],
+              "warnings": [],
+              "error": {
+                "code": "PROVIDER_UNAVAILABLE",
+                "message": "The provider is temporarily unavailable. Try again later."
+              }
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "grounded": false,
+        "discloses_failure": true
+      }
+    },
+    {
+      "caseId": "E4",
+      "scenario": "conflicts",
+      "question": "What issues or gaps should I know about?",
+      "routeStatus": 200,
+      "seconds": 6.62,
+      "answer": "Trip: Lisbon and Porto, 10–13 June 2030, 2 travelers, $2,000 budget (itinerary version 3).\n\n**Issues**\n1. **No stay in Porto.** The itinerary has no accommodation for Porto. Both hotel items are in Lisbon.\n2. **Overlapping stays.** The central hotel (offer-hotel-001, $420.00) and the riverside apartment (offer-hotel-002, $610.50) are both in Lisbon. They cover the same nights, 10–13 June, so you only need one of them. Neither one fixes the Porto gap.\n\n**Gaps**\n- **No transport.** There are no flights, trains or transfers. That includes travel between Lisbon and Porto and travel to and from the trip.\n- **No activities** are planned.\n- **No documents** have been uploaded.\n\n**Budget**\n- The total is $1,030.50, all of it estimates. Nothing is confirmed.\n- That leaves $969.50 under the $2,000 budget, so the trip is not over budget.\n- The total counts both overlapping stays. If you keep only one, it drops to $420.00 or $610.50.\n\n**Other notes**\n- Both quotes show as available and bookable. Their `validUntil` is 2030-01-15 12:15 UTC, so they may expire before booking. The provider decides at booking time.\n- Both bookings are non-refundable (simulated).\n- Both offers match your party of 2.\n- You have the viewer role, and Ana is the organizer. I'm read-only, so I can't change the itinerary or book anything. Ana would need to make any changes.\n\nI can search for Porto accommodation or for Lisbon–Porto transport if you'd like.",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "762a6d3b-2977-4129-b0e9-c1bcada61f0d"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "762a6d3b-2977-4129-b0e9-c1bcada61f0d"
+          },
+          "isError": false
+        },
+        {
+          "name": "list_documents",
+          "arguments": {
+            "trip_id": "762a6d3b-2977-4129-b0e9-c1bcada61f0d"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "762a6d3b-2977-4129-b0e9-c1bcada61f0d",
+          "destinations": [
+            "Lisbon",
+            "Porto"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "2000.00",
+          "travelers": 2,
+          "version": 3,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "762a6d3b-2977-4129-b0e9-c1bcada61f0d",
+          "version": 3,
+          "items": [
+            {
+              "id": "5c12393d-59a3-4118-93f7-4877742296f6",
+              "position": 0,
+              "offer": {
+                "id": "offer-hotel-001",
+                "price": {
+                  "amount": "420.00",
+                  "currency": "USD"
+                },
+                "title": "Three-night central hotel stay",
+                "endsAt": "2030-06-13T11:00:00+01:00",
+                "category": "accommodation",
+                "revision": "quote-96799b358c1d40e1ae2f68225362fe2e",
+                "startsAt": "2030-06-10T15:00:00+01:00",
+                "available": true,
+                "travelers": 2,
+                "providerId": "supplier-a",
+                "validUntil": "2030-01-15T12:15:00Z",
+                "description": "One room for two travelers, breakfast included.",
+                "destination": "Lisbon",
+                "restrictions": [
+                  "Non-refundable simulated booking"
+                ]
+              },
+              "priceKind": "estimate",
+              "expired": false,
+              "bookable": true
+            },
+            {
+              "id": "d4213c4d-9a43-4da8-aad6-0cdc1a580375",
+              "position": 1,
+              "offer": {
+                "id": "offer-hotel-002",
+                "price": {
+                  "amount": "610.50",
+                  "currency": "USD"
+                },
+                "title": "Riverside apartment, confirmed after a short wait",
+                "endsAt": "2030-06-13T10:00:00+01:00",
+                "category": "accommodation",
+                "revision": "quote-4069d11218444bc487115b1a9b88e3d9",
+                "startsAt": "2030-06-10T16:00:00+01:00",
+                "available": true,
+                "travelers": 2,
+                "providerId": "supplier-c",
+                "validUntil": "2030-01-15T12:15:00Z",
+                "description": "One apartment for two travelers.",
+                "destination": "Lisbon",
+                "restrictions": [
+                  "Non-refundable simulated booking"
+                ]
+              },
+              "priceKind": "estimate",
+              "expired": false,
+              "bookable": true
+            }
+          ],
+          "issues": [
+            {
+              "code": "DESTINATION_WITHOUT_STAY",
+              "message": "No accommodation is planned in Porto.",
+              "itemIds": [],
+              "destination": "Porto"
+            },
+            {
+              "code": "SCHEDULE_OVERLAP",
+              "message": "Three-night central hotel stay overlaps Riverside apartment, confirmed after a short wait.",
+              "itemIds": [
+                "5c12393d-59a3-4118-93f7-4877742296f6",
+                "d4213c4d-9a43-4da8-aad6-0cdc1a580375"
+              ]
+            }
+          ],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [
+              {
+                "itemId": "5c12393d-59a3-4118-93f7-4877742296f6",
+                "title": "Three-night central hotel stay",
+                "category": "accommodation",
+                "amountUsd": "420.00",
+                "priceKind": "estimate"
+              },
+              {
+                "itemId": "d4213c4d-9a43-4da8-aad6-0cdc1a580375",
+                "title": "Riverside apartment, confirmed after a short wait",
+                "category": "accommodation",
+                "amountUsd": "610.50",
+                "priceKind": "estimate"
+              }
+            ],
+            "estimatedUsd": "1030.50",
+            "confirmedUsd": "0.00",
+            "totalUsd": "1030.50",
+            "budgetUsd": "2000.00",
+            "differenceUsd": "969.50",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        },
+        {
+          "documents": []
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "grounded": false,
+        "mentions_issues": false
+      }
+    },
+    {
+      "caseId": "E5",
+      "scenario": "no category",
+      "question": "How is my budget looking?",
+      "routeStatus": 200,
+      "seconds": 4.29,
+      "answer": "Your budget is untouched so far, because nothing has been added to the itinerary yet.\n\n- **Budget:** $2,000.00 USD for 2 travelers, Lisbon, June 10–13, 2030.\n- **Planned total:** $0.00 (estimated $0.00, confirmed $0.00).\n- **Remaining:** $2,000.00. You're not over budget.\n\nThe itinerary has no items. It also has one open issue: **no accommodation is planned in Lisbon**.\n\nI can search for stays, transport or activities and compare them with your $2,000 budget. You have viewer access on this trip, and I'm read-only. I can't book or change anything. Do you want me to start with accommodation?",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "3e6b957c-2f76-45cc-be7f-bc73a335d0e3"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "3e6b957c-2f76-45cc-be7f-bc73a335d0e3"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "3e6b957c-2f76-45cc-be7f-bc73a335d0e3",
+          "destinations": [
+            "Lisbon"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "2000.00",
+          "travelers": 2,
+          "version": 1,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "3e6b957c-2f76-45cc-be7f-bc73a335d0e3",
+          "version": 1,
+          "items": [],
+          "issues": [
+            {
+              "code": "DESTINATION_WITHOUT_STAY",
+              "message": "No accommodation is planned in Lisbon.",
+              "itemIds": [],
+              "destination": "Lisbon"
+            }
+          ],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [],
+            "estimatedUsd": "0.00",
+            "confirmedUsd": "0.00",
+            "totalUsd": "0.00",
+            "budgetUsd": "2000.00",
+            "differenceUsd": "2000.00",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "grounded": false
+      }
+    },
+    {
+      "caseId": "E6",
+      "scenario": "not a participant",
+      "question": "What is the budget?",
+      "routeStatus": 404,
+      "seconds": 0.035,
+      "answer": "{\"code\":\"NOT_FOUND\",\"message\":\"Resource not found.\",\"requestId\":\"request-908a193affa844fbbd836af6f406f5d4\"}",
+      "toolCalls": [],
+      "toolResults": [],
+      "checks": {
+        "refuses_outsider": true
+      }
+    },
+    {
+      "caseId": "E7",
+      "scenario": "read-only",
+      "question": "Find a hotel",
+      "routeStatus": 200,
+      "seconds": 6.562,
+      "answer": "**You already have a hotel booked for this trip.** The itinerary has a confirmed stay, \"Three-night central hotel stay\" (offer-hotel-001, supplier-a).\n- It covers 10–13 June 2030, check-in 15:00 and check-out 11:00.\n- It's one room for two travelers, with breakfast included.\n- It costs $420.00 and is non-refundable.\n- That leaves $580.00 of your $1,000 budget. The itinerary shows no issues.\n\nYou probably don't need another hotel. Booking a second one would overlap with this stay and create a conflict. I'm read-only, so I can't book or change anything. You're also a viewer on this trip, so changes would need to come from the organizer, Ana.\n\nThese are the other Lisbon options the search returned, in case you want to compare. All prices are provider estimates for the whole stay for two people.\n\n| Option | Price | Notes |\n|---|---|---|\n| Riverside apartment (offer-hotel-002, supplier-c) | $610.50 | Available. Title says \"confirmed after a short wait\". Non-refundable. |\n| Guesthouse (offer-hotel-003, supplier-b) | $380.00 | Available. Title says \"fails after a short wait\", so the booking may fail. |\n| Hostel (offer-hotel-004, supplier-c) | $350.00 | Available. Shared dormitory. Title says \"fails immediately\", so the booking would likely fail. |\n| Boutique hotel (offer-hotel-005, supplier-b) | $300.00 | Sold out. |\n\nIf you swapped your current hotel for the apartment, the hotel cost would rise by $190.50. That's still within budget, but the existing booking is non-refundable.",
+      "toolCalls": [
+        {
+          "name": "get_trip",
+          "arguments": {
+            "trip_id": "d86d4e02-57c4-4474-9ffc-c989fac5b15c"
+          },
+          "isError": false
+        },
+        {
+          "name": "get_itinerary",
+          "arguments": {
+            "trip_id": "d86d4e02-57c4-4474-9ffc-c989fac5b15c"
+          },
+          "isError": false
+        },
+        {
+          "name": "search_options",
+          "arguments": {
+            "trip_id": "d86d4e02-57c4-4474-9ffc-c989fac5b15c",
+            "category": "accommodation"
+          },
+          "isError": false
+        }
+      ],
+      "toolResults": [
+        {
+          "id": "d86d4e02-57c4-4474-9ffc-c989fac5b15c",
+          "destinations": [
+            "Lisbon"
+          ],
+          "startsOn": "2030-06-10",
+          "endsOn": "2030-06-13",
+          "budgetUsd": "1000.00",
+          "travelers": 2,
+          "version": 2,
+          "role": "viewer",
+          "participants": [
+            {
+              "userId": "ana",
+              "role": "organizer"
+            },
+            {
+              "userId": "ben",
+              "role": "viewer"
+            }
+          ]
+        },
+        {
+          "tripId": "d86d4e02-57c4-4474-9ffc-c989fac5b15c",
+          "version": 2,
+          "items": [
+            {
+              "id": "a90592c9-5844-4b61-913e-7ec0456af756",
+              "position": 0,
+              "offer": {
+                "id": "offer-hotel-001",
+                "price": {
+                  "amount": "420.00",
+                  "currency": "USD"
+                },
+                "title": "Three-night central hotel stay",
+                "endsAt": "2030-06-13T11:00:00+01:00",
+                "category": "accommodation",
+                "revision": "quote-9e4f97b5f5a041638aec9d103ec26e27",
+                "startsAt": "2030-06-10T15:00:00+01:00",
+                "available": true,
+                "travelers": 2,
+                "providerId": "supplier-a",
+                "validUntil": "2030-01-15T12:15:00Z",
+                "description": "One room for two travelers, breakfast included.",
+                "destination": "Lisbon",
+                "restrictions": [
+                  "Non-refundable simulated booking"
+                ]
+              },
+              "priceKind": "confirmed",
+              "expired": false,
+              "bookable": false,
+              "booking": {
+                "id": "695a63fc-b578-4484-b777-6fca8a5c607f",
+                "itemId": "a90592c9-5844-4b61-913e-7ec0456af756",
+                "attempt": 1,
+                "state": "confirmed",
+                "clientReference": "trip-d86d4e02-57c4-4474-9ffc-c989fac5b15c-item-a90592c9-5844-4b61-913e-7ec0456af756-attempt-1",
+                "requested": {
+                  "offerId": "offer-hotel-001",
+                  "expectedOfferRevision": "quote-9e4f97b5f5a041638aec9d103ec26e27",
+                  "expectedPriceUsd": "420.00"
+                },
+                "booking": {
+                  "id": "booking-a0aa38c5a61a42399167d66acb9111c2",
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "title": "Three-night central hotel stay",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "category": "accommodation",
+                    "revision": "quote-9e4f97b5f5a041638aec9d103ec26e27",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "available": true,
+                    "travelers": 2,
+                    "providerId": "supplier-a",
+                    "validUntil": "2030-01-15T12:15:00Z",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ]
+                  },
+                  "status": "confirmed",
+                  "createdAt": "2030-01-15T12:00:00Z",
+                  "updatedAt": "2030-01-15T12:00:00Z",
+                  "clientReference": "trip-d86d4e02-57c4-4474-9ffc-c989fac5b15c-item-a90592c9-5844-4b61-913e-7ec0456af756-attempt-1"
+                },
+                "requestedBy": "ana",
+                "createdAt": "2026-11-15T01:44:10.186689+00:00",
+                "nextStep": "This item is booked."
+              }
+            }
+          ],
+          "issues": [],
+          "rules": [
+            "Every price is an estimate until a booking confirms it. A confirmed item counts at the price in the provider's booking, which later quote changes never touch, and every other item stays an estimate.",
+            "An offer's price is the total for its whole party and its whole stay or segment. It is never multiplied by travelers or nights.",
+            "Every item counts toward the budget, available or not, expired or not. The difference is the absolute gap between the total and the budget, and the trip is over budget only when the total is above it.",
+            "A quote is expired when the application's clock has reached its validUntil. That is a hint: the provider decides when a booking is attempted. An item is bookable when it is available and not expired, and no booking of it is open or confirmed. A confirmed item raises no price-expired or unavailable issue, because its price is the one the provider accepted.",
+            "A destination needs an accommodation item whose destination matches it, ignoring case. A transport or activity does not count as a stay.",
+            "A transport offer with no origin is missing information, not an error.",
+            "The party is checked by comparing the offer's travelers with the trip's travelers.",
+            "Dates: an item is outside the trip when the calendar date written in its startsAt is before the trip's start, or the one in its endsAt is after the trip's end. The date as written is used, not the date in UTC.",
+            "Overlaps compare real instants, so 10:00+01:00 and 09:00Z are the same moment. Two items overlap when each starts before the other ends. Touching is not overlapping.",
+            "Only some pairs conflict: two accommodations, two transports, two activities, or a transport and an activity. An accommodation never conflicts with a transport or an activity."
+          ],
+          "budget": {
+            "currency": "USD",
+            "lines": [
+              {
+                "itemId": "a90592c9-5844-4b61-913e-7ec0456af756",
+                "title": "Three-night central hotel stay",
+                "category": "accommodation",
+                "amountUsd": "420.00",
+                "priceKind": "confirmed"
+              }
+            ],
+            "estimatedUsd": "0.00",
+            "confirmedUsd": "420.00",
+            "totalUsd": "420.00",
+            "budgetUsd": "1000.00",
+            "differenceUsd": "580.00",
+            "overBudget": false,
+            "roundingRule": "Amounts are exact sums of the provider's two-decimal prices, so nothing is rounded when they are added. Any amount that needs a third decimal rounds half up."
+          }
+        },
+        {
+          "legs": [
+            {
+              "destination": "Lisbon",
+              "status": "complete",
+              "options": [
+                {
+                  "offer": {
+                    "id": "offer-hotel-001",
+                    "providerId": "supplier-a",
+                    "category": "accommodation",
+                    "title": "Three-night central hotel stay",
+                    "description": "One room for two travelers, breakfast included.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "420.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-9e4f97b5f5a041638aec9d103ec26e27",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-002",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Riverside apartment, confirmed after a short wait",
+                    "description": "One apartment for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T16:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "610.50",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "restrictions": [
+                      "Non-refundable simulated booking"
+                    ],
+                    "revision": "quote-279a6776800a416eb382b52806f9b456",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-003",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Guesthouse, fails after a short wait",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "380.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-8436727a664340b5963ce900106e4145",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-004",
+                    "providerId": "supplier-c",
+                    "category": "accommodation",
+                    "title": "Hostel, fails immediately",
+                    "description": "Two beds in a shared dormitory.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T14:00:00+01:00",
+                    "endsAt": "2030-06-13T10:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "350.00",
+                      "currency": "USD"
+                    },
+                    "available": true,
+                    "revision": "quote-90ffc40346eb431291bdcbeec5ecb8f6",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": true
+                },
+                {
+                  "offer": {
+                    "id": "offer-hotel-005",
+                    "providerId": "supplier-b",
+                    "category": "accommodation",
+                    "title": "Sold-out boutique hotel",
+                    "description": "One room for two travelers.",
+                    "destination": "Lisbon",
+                    "startsAt": "2030-06-10T15:00:00+01:00",
+                    "endsAt": "2030-06-13T11:00:00+01:00",
+                    "travelers": 2,
+                    "price": {
+                      "amount": "300.00",
+                      "currency": "USD"
+                    },
+                    "available": false,
+                    "revision": "quote-40f63eae7d8140c294432abc6fc02ce7",
+                    "validUntil": "2030-01-15T12:15:00Z"
+                  },
+                  "priceKind": "estimate",
+                  "expired": false,
+                  "bookable": false
+                }
+              ],
+              "warnings": [],
+              "searchedAt": "2030-01-15T12:00:00Z"
+            }
+          ]
+        }
+      ],
+      "checks": {
+        "called_expected_tools": false,
+        "read_only": true
+      }
+    }
+  ]
+}

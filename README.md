@@ -117,8 +117,8 @@ ANTHROPIC_API_KEY=... .venv/Scripts/python tests/assistant_evals.py --mode anthr
 ```
 
 The deterministic run is part of the suite and of CI. Model mode is not: it needs a key, calls Claude for each case
-(up to 8 model turns per question), and is billed by the Anthropic API. Its measured cost and score are recorded in
-`docs/STATUS.md` once a key is supplied.
+(up to 8 model turns per question), and is billed by the Anthropic API. Its score, latency and cost, measured in three
+runs after submission, are in `docs/model-mode-eval/README.md`.
 
 ## Test
 

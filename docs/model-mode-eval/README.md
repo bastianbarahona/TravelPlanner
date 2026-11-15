@@ -24,7 +24,7 @@ Measured on 2026-11-14, after the submission. The tag `submission-2026-11-08` ma
 
 Latency per answer was 4.3 to 9.0 seconds, under the browser's 30-second limit (`web/src/api.ts`).
 
-**Cost:** _to be read from the Anthropic console, filtered by the dedicated key._
+**Cost:** USD 0.43 for the three runs, about USD 0.14 per run and USD 0.02 per model case. Read from the Anthropic console, filtered by the key created only for this measurement (Claude Sonnet 5.5 only; the total also holds the one call that validated the key).
 
 ## Every failed check, read by hand
 

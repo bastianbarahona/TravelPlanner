@@ -20,6 +20,25 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-16: UML diagrams
+
+**Way of working:** the owner asked for the project's UML diagrams with the `diagram-design` skill (v2.6.164, already installed at user level, default style chosen by the owner). The Director (Claude Code, Opus) read the code and `ARCHITECTURE.md`, chose ten diagrams and wrote their content, and three `dev-principal` instances (Claude Sonnet) drew them in parallel in `docs/uml/`. Every file passed the skill's `self_check.py` and `verify_geometry.py`. Codex reviewed all ten once for accuracy against the code, read-only (`codex exec -s read-only`, no `usage limit` in its log). The Director reproduced each finding, the authors fixed them, and the checks ran again. The Director looked at every render.
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `use-cases`, `class-model`, `state-booking-attempt`, `sequence-booking` | Claude Sonnet | Codex | 0, 0, 0 | No change |
+| `components`, `deployment-compose`, `deployment-azure` | Claude Sonnet | Codex | 4, 1, 1 | All six reproduced by the Director, fixed by Sonnet |
+| `state-document-job` | Claude Sonnet | Codex | 1, 0, 1 | Both reproduced, fixed by Sonnet |
+| `sequence-assistant-mcp`, `activity-itinerary-write` | Claude Sonnet | Codex | 0, 2, 0 | Both reproduced, fixed by Sonnet |
+| The Director's content briefs | Claude Opus | Claude Sonnet, against the code | 5 conflicts | The code's version drawn, listed below |
+
+**Where the assistant was wrong**
+
+- **Sonnet wrote case-sensitive paths in capitals** (`HTTP /API`, `HTTP /V1`) in three diagrams, following the skill's all-caps rule for arrow labels. `/API` is not a route nginx serves. Found by Codex, lowercased.
+- **Sonnet's Compose start order said migrate waits for the provider mock.** It waits only for the database; the app waits for both. Found by Codex against `docker-compose.yml`, redrawn as two branches.
+- **Sonnet put `409 DOCUMENT_CORRUPT` inside the `failed` state,** where it read as the cause of every failure. It is only the download's answer on a hash mismatch. Found by Codex, moved to that transition.
+- **The Director's briefs were wrong six times.** Sonnet found four while reading the code: `uq_one_open_attempt` also blocks a new attempt after `confirmed`, the Compose start order left out the provider mock, the services list left out `participants.py`, and the assistant's answer also carries `tripId`. Codex found two in the drawn diagrams: the refusal order holds only once the body decodes (`ARCHITECTURE.md`, Limits I accept), and search is one provider call per destination, concurrently, not one call.
+
 ### 2026-11-08: Iteration 8, delivery
 
 **Way of working:** the Director (Claude Code, Opus) probed first, then briefed Claude Sonnet (`dev-principal`), which wrote `README.md`, `DEMO.md` and the deployment section of `ARCHITECTURE.md`. Codex reviewed them once, read-only (`codex exec -s read-only`, no `usage limit` in its log). The Director wrote `docs/STATUS.md` and this entry, and checked every test name and UI text that `DEMO.md` cites against `tests/` and `web/src`.

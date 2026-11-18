@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 920" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="activity-itinerary-write-title activity-itinerary-write-desc" id="activity-itinerary-write-root">
+        <title id="activity-itinerary-write-title">Add an itinerary item with the optimistic lock</title>
+        <desc id="activity-itinerary-write-desc">Activity diagram of POST /trips/{tripId}/itinerary/items: refusals, the version check, the provider quote, the guarded UPDATE that is the lock, and the unique index that keeps one item per offer.</desc>
+        <defs>
+      <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #activity-itinerary-write-root { --color-paper:   #f5f5f5;   
+      --color-ink:     #2d3142;   
+      --color-muted:   #4f5d75;   
+      --color-accent:  #bf4520;   
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #activity-itinerary-write-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #activity-itinerary-write-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#activity-itinerary-write-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="activity-itinerary-write-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="activity-itinerary-write-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="activity-itinerary-write-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- arrows: spine -->
+        <line x1="400" y1="104" x2="400" y2="136" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="400" y1="216" x2="400" y2="252" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="400" y1="332" x2="400" y2="368" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="400" y1="448" x2="400" y2="484" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="400" y1="564" x2="400" y2="600" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="400" y1="648" x2="400" y2="680" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <!-- arrows: exits to the response -->
+        <line x1="540" y1="176" x2="960" y2="176" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="540" y1="292" x2="960" y2="292" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="540" y1="408" x2="960" y2="408" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="540" y1="524" x2="960" y2="524" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <line x1="540" y1="720" x2="960" y2="720" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <path d="M 400 760 V 784 a 8 8 0 0 0 8 8 H 960" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <!-- arrow labels -->
+        <rect x="408" y="228" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="420" y="237" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">YES</text>
+        <rect x="408" y="344" width="84" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="450" y="353" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">YES · ROLLBACK</text>
+        <rect x="408" y="460" width="24" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="420" y="469" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">YES</text>
+        <rect x="408" y="576" width="36" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="426" y="585" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">1 ROW</text>
+        <rect x="680" y="156" width="140" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="165" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">NO: 401 · 404 · 403 · 422</text>
+        <rect x="682" y="258" width="136" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="267" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">NO: 409 VERSION_CONFLICT</text>
+        <rect x="706" y="272" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="281" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">details.current</text>
+        <rect x="680" y="388" width="140" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="397" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">NO: 409 OFFER_UNAVAILABLE</text>
+        <rect x="664" y="476" width="172" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="485" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">0 ROWS: a concurrent writer won</text>
+        <rect x="692" y="490" width="116" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="499" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">409 VERSION_CONFLICT</text>
+        <rect x="706" y="504" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="513" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">details.current</text>
+        <rect x="660" y="672" width="180" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="681" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">YES: ROLLBACK, the bump goes too</text>
+        <rect x="666" y="686" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="695" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">409 OFFER_ALREADY_IN_ITINERARY</text>
+        <rect x="706" y="700" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="750" y="709" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">details.current</text>
+        <rect x="668" y="758" width="64" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="700" y="767" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">NO: COMMIT</text>
+        <rect x="648" y="772" width="104" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="700" y="781" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">201 itinerary view</text>
+        <!-- nodes -->
+        <rect x="240" y="40" width="320" height="64" rx="24" fill="#f5f5f5"/>
+        <rect x="240" y="40" width="320" height="64" rx="24" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <text x="400" y="62" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Add an item</text>
+        <text x="400" y="77" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">POST /trips/{tripId}/itinerary/items</text>
+        <text x="400" y="90" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">{version, offerId}</text>
+        <polygon points="400,136 540,176 400,216 260,176" fill="#f5f5f5"/>
+        <polygon points="400,136 540,176 400,216 260,176" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="175" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Refusals pass?</text>
+        <text x="400" y="190" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">401 → 404 → 403 → 422</text>
+        <polygon points="400,252 540,292 400,332 260,292" fill="#f5f5f5"/>
+        <polygon points="400,252 540,292 400,332 260,292" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Body version</text>
+        <text x="400" y="304" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">= trips.version?</text>
+        <polygon points="400,368 540,408 400,448 260,408" fill="#f5f5f5"/>
+        <polygon points="400,368 540,408 400,448 260,408" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="407" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Offer available?</text>
+        <text x="400" y="422" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">GET /offers/{offerId}</text>
+        <polygon points="400,484 540,524 400,564 260,524" fill="#f5f5f5"/>
+        <polygon points="400,484 540,524 400,564 260,524" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <text x="400" y="523" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Guarded UPDATE: 1 row?</text>
+        <text x="400" y="538" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">WHERE id = ? AND version = ?</text>
+        <polygon points="400,680 540,720 400,760 260,720" fill="#f5f5f5"/>
+        <polygon points="400,680 540,720 400,760 260,720" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="719" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Offer already added?</text>
+        <text x="400" y="734" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">uq_itinerary_offer</text>
+        <rect x="280" y="600" width="240" height="48" rx="6" fill="#f5f5f5"/>
+        <rect x="280" y="600" width="240" height="48" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="400" y="621" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">INSERT item</text>
+        <text x="400" y="637" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">position = count</text>
+        <rect x="960" y="136" width="200" height="680" rx="20" fill="#f5f5f5"/>
+        <rect x="960" y="136" width="200" height="680" rx="20" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <text x="1060" y="164" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">HTTP response</text>
+        <text x="1060" y="180" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">error body: code, message,</text>
+        <text x="1060" y="193" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">requestId, optional details</text>
+        <path d="M 40 136 H 228 L 240 148 V 268 H 40 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-opacity="0.30"/>
+        <path d="M 228 136 V 148 H 240" fill="none" stroke="#2d3142" stroke-width="1" stroke-opacity="0.30"/>
+        <text x="50" y="156" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist', sans-serif">Order, once the body decodes</text>
+        <text x="50" y="170" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">401 token missing or invalid</text>
+        <text x="50" y="184" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">404 nonparticipant, missing or</text>
+        <text x="50" y="198" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">malformed trip</text>
+        <text x="50" y="212" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">403 not an organizer or editor</text>
+        <text x="50" y="226" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">422 invalid body</text>
+        <text x="50" y="240" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">A body that is not JSON: 422</text>
+        <text x="50" y="254" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">comes first.</text>
+        <text x="40" y="508" fill="#bf4520" font-size="14" font-style="italic" font-family="'Instrument Serif', serif">The real lock: of two writers</text>
+        <text x="40" y="526" fill="#bf4520" font-size="14" font-style="italic" font-family="'Instrument Serif', serif">holding the same version,</text>
+        <text x="40" y="544" fill="#bf4520" font-size="14" font-style="italic" font-family="'Instrument Serif', serif">only one UPDATE matches.</text>
+        <path d="M 228 542 Q 248 542 252 526" fill="none" stroke="#bf4520" stroke-width="1" stroke-dasharray="4,3" stroke-opacity="0.50"/>
+        <circle cx="252" cy="526" r="2" fill="#bf4520"/>
+        <line x1="56" y1="856" x2="1224" y2="856" stroke="#2d3142" stroke-width="0.8" stroke-opacity="0.10"/>
+        <text x="56" y="872" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND · SHAPE CARRIES TYPE</text>
+        <rect x="56" y="885" width="28" height="14" rx="7" fill="#2d3142" stroke="#2d3142" stroke-width="1" fill-opacity="0.03" stroke-opacity="0.30"/>
+        <text x="92" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Start / response (oval)</text>
+        <rect x="248" y="885" width="24" height="14" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="280" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Step (rectangle)</text>
+        <polygon points="408,892 420,885 432,892 420,899" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text x="444" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Decision (diamond)</text>
+        <polygon points="600,892 612,885 624,892 612,899" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08"/>
+        <text x="636" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">The lock</text>
+        <path d="M 740 886 H 760 L 768 894 V 900 H 740 Z" fill="#ffffff" stroke="#2d3142" stroke-width="1" stroke-opacity="0.30"/>
+        <text x="776" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Note</text>
+        <line x1="856" y1="892" x2="884" y2="892" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#activity-itinerary-write-arrow)"/>
+        <text x="892" y="896" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow</text>
+      </svg>

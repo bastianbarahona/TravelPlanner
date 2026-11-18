@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking with reconciliation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;   /* white-smoke */
+      --color-ink:     #2d3142;   /* jet-black */
+      --color-muted:   #4f5d75;   /* blue-slate */
+      --color-accent:  #bf4520;   /* burnt-tangerine */
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1360px; width: 100%; min-width: 0; }
+    /* The SVG holds its readable width (min-width == the viewBox width, so the
+       type ramp is never silently scaled down). This wrapper lets a narrow
+       screen scroll the diagram instead of the whole page. */
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 1280px; display: block; }
+    /* Paper has no scrollbar, so the local scroller would clip instead of
+       scroll. Let the diagram scale down to the sheet: smaller but whole
+       beats sharp but cut off. Must come after the svg rule above - a media
+       query adds no specificity, so a later plain rule would win. */
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">TravelPlanner · UML · Sequence diagram</p>
+    <h1>Booking with reconciliation</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 964" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sequence-booking-title sequence-booking-desc">
+        <title id="sequence-booking-title">Booking with reconciliation</title>
+        <desc id="sequence-booking-desc">Sequence diagram of a booking: the attempt is committed as unknown before the provider POST, the answer moves its state forward only, and a reconciler loop reads the provider by reference while the editor polls the stored state.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+        <!-- lifelines -->
+        <line x1="160" y1="96" x2="160" y2="880" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="400" y1="96" x2="400" y2="880" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="640" y1="96" x2="640" y2="880" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="880" y1="96" x2="880" y2="880" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="1120" y1="96" x2="1120" y2="880" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <!-- LOOP fragment: the reconciler part -->
+        <rect x="592" y="464" width="568" height="272" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <rect x="592" y="464" width="48" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <text x="616" y="476" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">LOOP</text>
+        <text x="604" y="496" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.04em">[forever · one task per process, started by the lifespan]</text>
+        <!-- activation bars -->
+        <rect x="396" y="152" width="8" height="304" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+        <rect x="396" y="792" width="8" height="68" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+        <rect x="1116" y="544" width="8" height="172" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+        <!-- messages -->
+        <!-- M1 editor -> api -->
+        <line x1="160" y1="160" x2="396" y2="160" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="196" y="112" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="121" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">POST /trips/{tripId}/itinerary</text>
+        <rect x="214" y="126" width="132" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="135" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">/items/{itemId}/booking</text>
+        <rect x="180" y="140" width="200" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="149" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">{expectedRevision, expectedPriceUsd}</text>
+        <!-- M2 api -> pg -->
+        <line x1="404" y1="224" x2="640" y2="224" stroke="#bf4520" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+        <rect x="444" y="176" width="156" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="185" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">INSERT attempt state=unknown</text>
+        <rect x="438" y="190" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="199" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">key, request, clientReference:</text>
+        <rect x="456" y="204" width="132" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="213" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">trip-…-item-…-attempt-n</text>
+        <rect x="436" y="232" width="172" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="241" fill="#bf4520" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">COMMIT before any provider call</text>
+        <!-- M3 api -> prov -->
+        <line x1="404" y1="292" x2="880" y2="292" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="718" y="258" width="84" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="760" y="267" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">POST /bookings</text>
+        <rect x="696" y="272" width="128" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="760" y="281" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">Idempotency-Key: &lt;key&gt;</text>
+        <!-- M4 prov -> api -->
+        <line x1="880" y1="344" x2="404" y2="344" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="712" y="310" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="760" y="319" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">Booking {status}</text>
+        <rect x="674" y="324" width="172" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="760" y="333" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">or timeout · 5xx · 429: unknown</text>
+        <!-- M5 api -> pg -->
+        <line x1="404" y1="396" x2="640" y2="396" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="454" y="362" width="136" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="371" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">UPDATE state (monotonic)</text>
+        <rect x="436" y="376" width="172" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="522" y="385" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">WHERE state IN MAY_REPLACE[new]</text>
+        <!-- M6 api -> editor -->
+        <line x1="396" y1="448" x2="160" y2="448" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="214" y="414" width="132" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="423" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">201, whatever the state</text>
+        <rect x="196" y="428" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="437" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">attempt view {state, nextStep}</text>
+        <!-- M7 rec -> pg -->
+        <line x1="1116" y1="552" x2="640" y2="552" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="944" y="504" width="112" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="513" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">claim due attempts:</text>
+        <rect x="934" y="518" width="132" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="527" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">FOR UPDATE SKIP LOCKED,</text>
+        <rect x="924" y="532" width="152" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="541" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">move next_check_at · COMMIT</text>
+        <!-- M8 rec -> prov -->
+        <line x1="1116" y1="604" x2="880" y2="604" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="924" y="570" width="152" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="579" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">GET /bookings/by-reference/</text>
+        <rect x="916" y="584" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="593" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">{clientReference} (never POST)</text>
+        <!-- M9 prov -> rec -->
+        <line x1="880" y1="656" x2="1116" y2="656" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="952" y="622" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="631" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">Booking {status}</text>
+        <rect x="900" y="636" width="200" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="645" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">404 · 429 · 503 · timeout: no change</text>
+        <!-- M10 rec -> pg -->
+        <line x1="1116" y1="708" x2="640" y2="708" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <rect x="932" y="674" width="136" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="683" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">UPDATE state (monotonic)</text>
+        <rect x="950" y="688" width="100" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="1000" y="697" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">+ last_checked_at</text>
+        <!-- M11 editor -> api -->
+        <line x1="160" y1="800" x2="396" y2="800" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <rect x="198" y="752" width="164" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="761" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">GET /trips/{tripId}/itinerary</text>
+        <rect x="214" y="766" width="132" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="775" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">/items/{itemId}/booking</text>
+        <rect x="186" y="780" width="188" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="789" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">every 3 s while pending or unknown</text>
+        <!-- M12 api -> editor -->
+        <line x1="396" y1="852" x2="160" y2="852" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <rect x="232" y="818" width="96" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="827" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">200 attempt view</text>
+        <rect x="194" y="832" width="172" height="12" rx="2" fill="#f5f5f5"/>
+        <text x="280" y="841" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.04em">from Postgres, no provider call</text>
+        <!-- actors -->
+        <rect x="80" y="40" width="160" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="80" y="40" width="160" height="56" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+        <rect x="88" y="48" width="32" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.40)" stroke-width="0.8"/>
+        <text x="104" y="57" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WEB</text>
+        <text x="160" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Editor</text>
+        <text x="160" y="89" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">browser</text>
+        <rect x="320" y="40" width="160" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="320" y="40" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="328" y="48" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+        <text x="344" y="57" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+        <text x="400" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">API</text>
+        <text x="400" y="89" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">services/booking.py</text>
+        <rect x="560" y="40" width="160" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="560" y="40" width="160" height="56" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+        <rect x="568" y="48" width="28" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+        <text x="582" y="57" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+        <text x="640" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Postgres</text>
+        <text x="640" y="89" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">booking_attempts</text>
+        <rect x="800" y="40" width="160" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="800" y="40" width="160" height="56" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="808" y="48" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+        <text x="824" y="57" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+        <text x="880" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Provider</text>
+        <text x="880" y="89" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">contract openAPI.json</text>
+        <rect x="1040" y="40" width="160" height="56" rx="6" fill="#f5f5f5"/>
+        <rect x="1040" y="40" width="160" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1048" y="48" width="36" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+        <text x="1066" y="57" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LOOP</text>
+        <text x="1120" y="76" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Reconciler</text>
+        <text x="1120" y="89" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">lifespan task, same process</text>
+        <path d="M 240 488 H 548 L 560 500 V 564 H 240 Z" fill="#ffffff" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <path d="M 548 488 V 500 H 560" fill="none" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="250" y="508" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist', sans-serif">Provider calls hold no transaction</text>
+        <text x="250" y="522" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">No database transaction is open while the provider</text>
+        <text x="250" y="536" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">is called. The POST (API) and the GET (Reconciler)</text>
+        <text x="250" y="550" fill="#4f5d75" font-size="10" font-family="'Geist', sans-serif">both run after a commit or a rollback.</text>
+        <line x1="56" y1="900" x2="1224" y2="900" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="56" y="916" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+        <line x1="56" y1="936" x2="84" y2="936" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text x="92" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">HTTP call</text>
+        <line x1="216" y1="936" x2="244" y2="936" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text x="252" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">SQL</text>
+        <line x1="336" y1="936" x2="364" y2="936" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <text x="372" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Return</text>
+        <line x1="472" y1="936" x2="500" y2="936" stroke="#bf4520" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <text x="508" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Commit before the provider is called (step 2)</text>
+        <rect x="776" y="930" width="32" height="14" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <text x="784" y="940" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace">LOOP</text>
+        <text x="816" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Fragment</text>
+        <path d="M 904 930 H 924 L 932 938 V 944 H 904 Z" fill="#ffffff" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text x="940" y="940" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Note</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

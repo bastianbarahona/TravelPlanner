@@ -173,6 +173,7 @@ Not deployed. The proposal is Azure Container Apps: `web` public, `app` and the 
 
 - `DEMO.md`: the main workflow, and the failure and concurrency scenarios, step by step.
 - `ARCHITECTURE.md`: decisions, alternatives, guarantees, limits and risks.
+- `docs/uml/README.md`: ten UML diagrams of the application (use cases, components, deployment, classes, states, sequences and an activity).
 - `docs/STATUS.md`: where the project stands, iteration by iteration.
 - `provider-mock/README.md`: the provider mock, its fixtures and its control interface.
 - `docs/CONTRACT_NOTES.md`: how the contract is read, and the gaps it leaves.

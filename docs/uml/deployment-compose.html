@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docker Compose deployment</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;   /* white-smoke */
+      --color-ink:     #2d3142;   /* jet-black */
+      --color-muted:   #4f5d75;   /* blue-slate */
+      --color-accent:  #bf4520;   /* burnt-tangerine */
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+
+    .frame { max-width: 1280px; width: 100%; }
+    /* The SVG holds its readable width (min-width == the viewBox width, so the
+       type ramp is never silently scaled down). This wrapper lets a narrow
+       screen scroll the diagram instead of the whole page. */
+    .diagram-container { width: 100%; overflow-x: auto; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+
+    svg { width: 100%; min-width: 1280px; display: block; }
+    /* Paper has no scrollbar, so the local scroller would clip instead of
+       scroll. Let the diagram scale down to the sheet: smaller but whole
+       beats sharp but cut off. Must come after the svg rule above - a media
+       query adds no specificity, so a later plain rule would win. */
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">TravelPlanner · UML · Deployment diagram</p>
+    <h1>Docker Compose, as built today</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deployment-compose-title deployment-compose-desc">
+        <title id="deployment-compose-title">Docker Compose deployment</title>
+        <desc id="deployment-compose-desc">Deployment diagram of the Docker Compose stack: the browser reaches web on host port 8080, web proxies /api to app, app uses db and provider-mock, and migrate upgrades the database once before app starts.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+<!-- Zones -->
+      <rect x="224" y="40" width="1016" height="548" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="0.8" stroke-dasharray="4,4"/>
+      <rect x="240" y="44" width="92" height="12" fill="#f5f5f5"/>
+      <text x="286" y="53" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">DOCKER COMPOSE</text>
+      <!-- Connectors (behind nodes) -->
+      <line x1="176" y1="348" x2="320" y2="348" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <line x1="544" y1="348" x2="648" y2="348" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="872" y1="364" x2="976" y2="364" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 872,332 H 916 Q 924,332 924,324 V 152 Q 924,144 932,144 H 976" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 872,516 H 1092 Q 1100,516 1100,508 V 416" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <!-- Connector labels -->
+      <rect x="240" y="330" width="64" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="272" y="339" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP :8080</text>
+      <rect x="558" y="330" width="76" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="596" y="339" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">/api → :8000</text>
+      <rect x="894" y="346" width="60" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="924" y="355" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SQL :5432</text>
+      <rect x="860" y="224" width="56" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="888" y="233" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HTTP /v1</text>
+      <rect x="944" y="498" width="76" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="982" y="507" fill="#5a6580" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">UPGRADE HEAD</text>
+      <!-- Nodes -->
+      <rect x="40" y="316" width="136" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="316" width="136" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+      <rect x="48" y="322" width="44" height="12" rx="2" fill="transparent" stroke="rgba(90,101,128,0.50)" stroke-width="0.8"/>
+      <text x="70" y="331" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CLIENT</text>
+      <text x="108" y="352" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Browser</text>
+      <text x="108" y="368" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">localhost:8080</text>
+
+      <rect x="320" y="296" width="224" height="104" rx="6" fill="#f5f5f5"/>
+      <rect x="320" y="296" width="224" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="328" y="302" width="60" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="358" y="311" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTAINER</text>
+      <text x="432" y="330" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">web</text>
+      <text x="432" y="344" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">host 8080 → 80</text>
+      <text x="432" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">resolver 127.0.0.11</text>
+      <rect x="328" y="364" width="208" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="336" y="380" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">nginx</text>
+      <text x="528" y="380" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">1.27-alpine</text>
+
+      <rect x="648" y="296" width="224" height="104" rx="6" fill="#f5f5f5"/>
+      <rect x="648" y="296" width="224" height="104" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="656" y="302" width="60" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="686" y="311" fill="#2d3142" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTAINER</text>
+      <text x="760" y="330" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">app</text>
+      <text x="760" y="344" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">host 8000 → 8000 · uvicorn</text>
+      <text x="760" y="356" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">healthcheck /ready</text>
+      <rect x="656" y="364" width="208" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="664" y="380" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">FastAPI</text>
+      <text x="856" y="380" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">0.162.0</text>
+
+      <rect x="648" y="464" width="224" height="104" rx="6" fill="#f5f5f5"/>
+      <rect x="648" y="464" width="224" height="104" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+      <rect x="656" y="470" width="52" height="12" rx="2" fill="transparent" stroke="rgba(191,69,32,0.50)" stroke-width="0.8"/>
+      <text x="682" y="479" fill="#bf4520" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ONE-SHOT</text>
+      <text x="760" y="498" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">migrate</text>
+      <text x="760" y="512" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">alembic upgrade head</text>
+      <text x="760" y="524" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">runs once, exits 0</text>
+      <rect x="656" y="532" width="208" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="664" y="548" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">alembic</text>
+      <text x="856" y="548" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">1.20.1</text>
+
+      <rect x="976" y="280" width="248" height="136" rx="6" fill="#f5f5f5"/>
+      <rect x="976" y="280" width="248" height="136" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="984" y="286" width="60" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="1014" y="295" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTAINER</text>
+      <text x="1100" y="314" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">db</text>
+      <text x="1100" y="328" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">5432, internal only</text>
+      <text x="1100" y="340" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">healthcheck pg_isready</text>
+      <rect x="984" y="348" width="232" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="992" y="364" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">postgres</text>
+      <text x="1208" y="364" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">17-alpine</text>
+      <rect x="984" y="380" width="232" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="992" y="396" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">app-db-data</text>
+      <text x="1208" y="396" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">/var/lib/postgresql/data</text>
+
+      <rect x="976" y="80" width="248" height="136" rx="6" fill="#f5f5f5"/>
+      <rect x="976" y="80" width="248" height="136" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="984" y="86" width="60" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+      <text x="1014" y="95" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CONTAINER</text>
+      <text x="1100" y="114" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">provider-mock</text>
+      <text x="1100" y="128" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">host 4010 → 4010 · uvicorn</text>
+      <text x="1100" y="140" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">SQLite /data/provider-mock.db</text>
+      <rect x="984" y="148" width="232" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="992" y="164" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">FastAPI</text>
+      <text x="1208" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">0.162.0</text>
+      <rect x="984" y="180" width="232" height="24" rx="4" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="992" y="196" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">provider-mock-data</text>
+      <text x="1208" y="196" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">/data</text>
+
+      <!-- Annotations -->
+      <rect x="320" y="456" width="224" height="112" rx="6" fill="none" stroke="rgba(45,49,66,0.30)" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="332" y="476" fill="#5a6580" font-size="7" font-family="'Geist Mono', monospace" letter-spacing="0.14em">START ORDER · DEPENDS_ON</text>
+      <text x="332" y="494" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">db healthy → migrate exits 0 → app</text>
+      <text x="332" y="508" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">provider-mock healthy → app</text>
+      <text x="332" y="522" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">app healthy → web</text>
+      <text x="332" y="540" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace">host ports are defaults of</text>
+      <text x="332" y="554" fill="#5a6580" font-size="9" font-family="'Geist Mono', monospace">WEB_PORT, APP_PORT, MOCK_PORT</text>
+      <!-- Legend strip -->
+      <line x1="40" y1="632" x2="1240" y2="632" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="648" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="40" y="664" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+      <text x="60" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">One-shot job</text>
+      <rect x="143" y="664" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="163" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Container</text>
+      <rect x="232" y="664" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="252" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Store</text>
+      <rect x="303" y="664" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
+      <text x="323" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Client</text>
+      <rect x="378" y="664" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="398" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Mock</text>
+      <rect x="444" y="664" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="464" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Artifact: image, volume</text>
+      <line x1="597" y1="669" x2="625" y2="669" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <text x="633" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Crosses the boundary</text>
+      <line x1="753" y1="669" x2="781" y2="669" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="789" y="672" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Inside Compose</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

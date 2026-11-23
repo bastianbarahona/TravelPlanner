@@ -3,3 +3,4 @@
 !provider-mock/
 !app/
 **/__pycache__
+**/.venv

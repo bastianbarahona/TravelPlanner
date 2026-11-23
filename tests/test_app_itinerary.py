@@ -417,7 +417,8 @@ def test_rounding_primitives_exist_only_in_money_module():
     forbidden = ("quantize", "round(", "ROUND_", "float(")
     offenders = []
     for path in (APP_SOURCE_ROOT / "app").rglob("*.py"):
-        if path.name == "money.py":
+        # A virtual environment inside app/ is third-party code, not the application.
+        if path.name == "money.py" or ".venv" in path.relative_to(APP_SOURCE_ROOT / "app").parts:
             continue
         source = path.read_text(encoding="utf-8")
         for token in forbidden:

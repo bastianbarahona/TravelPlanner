@@ -98,6 +98,7 @@ The notes hold the detail. These are the ones an implementation most easily brea
 - **Auto-fix has no app-wide default,** so the rule in `CLAUDE.md` is what turns it on. It covers pull requests opened from a Claude Code session, not ones opened by hand.
 - **`docs/observaciones.md` is local only.** It is excluded through `.git/info/exclude`, so it has no backup and does not exist on other clones or in worktrees.
 - **Cases where AI was wrong live in `AI-USAGE.md`,** which `CLAUDE.md` requires for every new one.
+- **A virtual environment inside `app/` is not application code (2026-11-19).** After the move to a new machine, `app/.venv` sat inside the source tree. The full suite failed 1 of 680: `test_rounding_primitives_exist_only_in_money_module` scanned the venv's third-party packages, `mutation_check.py` copied it into every app mutation (and `provider-mock/.venv` into every mock mutation), and the `app` image copied its 164 MB because `.dockerignore` lets in all of `app/`. Now the scan and the mutation copy skip `.venv`, and `.dockerignore` excludes `**/.venv`. Checked: the test passes, still fails on a planted `float(` in `app/services/`, and the rebuilt image has no `/app/app/.venv`.
 
 ---
 

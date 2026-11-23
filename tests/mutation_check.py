@@ -994,7 +994,7 @@ def run(number, label, filename, replacements, suite="mock"):
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as workspace:
         copy = Path(workspace)
         source_dir = "app" if suite == "app" else "provider-mock"
-        shutil.copytree(ROOT / source_dir, copy / source_dir, ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(ROOT / source_dir, copy / source_dir, ignore=shutil.ignore_patterns("__pycache__", ".venv"))
         shutil.copytree(ROOT / "contracts", copy / "contracts")
         target = copy / source_dir / filename
         source = target.read_text(encoding="utf-8")

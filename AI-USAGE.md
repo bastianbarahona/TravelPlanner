@@ -20,6 +20,20 @@ None of this is an application dependency.
 
 ## Log
 
+### 2026-11-19: After the machine migration, `.venv` inside the source tree
+
+**Context:** on a new Windows 11 machine, `app/.venv` and `provider-mock/.venv` sit inside the source tree. The full suite failed 1 of 680 (`docs/STATUS.md`, 1.5). The Director (Claude Code, Opus) wrote the fix: the rounding scan and the mutation copy skip `.venv`, and `.dockerignore` excludes `**/.venv`. Codex reviewed it once, read-only (`codex exec -s read-only`, no `usage limit` in its log; every match was text it read from `CLAUDE.md` and `docs/STATUS.md`). `app/` and `contracts/` did not change.
+
+| Artifact | Author | Reviewer | Blocker, major, minor | Outcome |
+|---|---|---|---|---|
+| `.venv` exclusions and the `docs/STATUS.md` entry | Director | Codex | 0, 0, 2 | 1 accepted, 1 declined |
+
+**Where an assistant was wrong**
+
+- **The Director's `docs/STATUS.md` entry said the mutation check copied `app/.venv` into every mutation.** Only app mutations copy it; mock mutations copy `provider-mock/.venv`. Found by Codex, reworded.
+- **Codex asked to prune `.venv` from the walk instead of filtering after `rglob`.** Declined: the test runs in 0.21 s with the venv present, and pruning means replacing `rglob` with `os.walk` for no observable gain.
+- **Codex reported that every migrated venv points to a missing Python.** Wrong for `app/`, `provider-mock/` and `tests/`, which run 3.11.9 outside its sandbox; only the root `.venv` is broken. Its sandbox cannot see the base installation, and it could not reach Docker. The Director's checks (the test, the planted offender, the rebuilt image) stand as the evidence.
+
 ### 2026-11-14: After submission, the model-mode measurement
 
 **Context:** this work is on the branch `post-submission/model-mode-eval`, after the submission. The tag `submission-2026-11-08` marks the submitted commit (`a3720a4`), and `main` does not change. Its goal is to close the one gap the README declared: the assistant's model mode had never run against the real API.
